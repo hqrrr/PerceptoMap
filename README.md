@@ -150,7 +150,9 @@ Not yet prebuilt — If you're a developer or familiar with JUCE/Xcode, please b
 
 ### Build with CMake
 
-On Windows (Visual Studio 2022)
+Based on [JUCE CMake Plugin Template](https://github.com/anthonyalfimov/JUCE-CMake-Plugin-Template).
+
+#### On Windows (Visual Studio 2022)
 
 1. Open the project root in Visual Studio (choose "Open a local folder").
 2. Visual Studio will automatically detect the CMakeLists.txt.
@@ -158,7 +160,7 @@ On Windows (Visual Studio 2022)
 4. In the CMake Targets View: `PerceptoMap/PerceptoMap Project/Targets`, right-click `PerceptoMap_VST3` and click Build.
 4. The plugin binary will be placed in the build output directory: `out/build/x64-Release/VST3/PerceptoMap.vst3`
 
-Or using terminal
+#### On Windows (Terminal)
 
 ```
 cd path\to\PerceptoMap
