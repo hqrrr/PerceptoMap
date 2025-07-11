@@ -144,16 +144,34 @@ Not yet prebuilt — If you're a developer or familiar with JUCE/Xcode, please b
 
 ### Prerequisites
 
-- JUCE 8.x (open-source under AGPLv3)
-- C++17 compatible compiler
-- Projucer (included in JUCE)
+- JUCE 8.x (automatically fetched via CMake)
+- C++17 compatible compiler, e.g. Visual Studio 2022 (Windows)
+- CMake 3.22+
 
-### Build with Projucer
+### Build with CMake
 
-1. Open `PerceptoMap.jucer` in **Projucer**
-2. Click **Save Project and Open in IDE** (Visual Studio, Xcode, etc.)
-3. Build the target for your desired format (VST3, AU, AAX etc. which you selected in Projucer setting)
-4. The plugin binary will be placed in the build output directory
+On Windows (Visual Studio 2022)
+
+1. Open the project root in Visual Studio (choose "Open a local folder").
+2. Visual Studio will automatically detect the CMakeLists.txt.
+3. Select a CMake target configuration (e.g. x64-Release).
+4. In the CMake Targets View: `PerceptoMap/PerceptoMap Project/Targets`, right-click `PerceptoMap_VST3` and click Build.
+4. The plugin binary will be placed in the build output directory: `out/build/x64-Release/VST3/PerceptoMap.vst3`
+
+Or using terminal
+
+```
+cd path\to\PerceptoMap
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release
+```
+
+If using Ninja
+
+```
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+```
 
 ## Folder Structure
 
@@ -161,8 +179,8 @@ Not yet prebuilt — If you're a developer or familiar with JUCE/Xcode, please b
 PerceptoMap/
 ├── _pics/               -> Screenshots and images for documentation
 ├── Source/              -> Main plugin source code
-├── Builds/              -> IDE-specific build files (Visual Studio, Xcode, etc.)
-├── PerceptoMap.jucer    -> Projucer project file (JUCE-based build config)
+├── CMakeLists.txt       -> Main build configuration (CMake-based)
+├── CMakeSettings.json   -> (Optional) Visual Studio CMake config
 ├── README.md            -> Project documentation
 └── LICENSE              -> AGPLv3 license file (required for JUCE open-source usage)
 ```
