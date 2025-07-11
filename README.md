@@ -121,10 +121,10 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
       </sub>
     </td>
     <td align="center" valign="top">
-      <img src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='500'></svg>" width="100%" alt="" />
+      <img src="_pics/blank_500x500.png" width="100%" alt="blank" />
     </td>
     <td align="center" valign="top">
-      <img src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='500'></svg>" width="100%" alt="" />
+      <img src="_pics/blank_500x500.png" width="100%" alt="blank" />
     </td>
   </tr>
 </table>
