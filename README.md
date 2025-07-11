@@ -4,7 +4,7 @@
 
 PerceptoMap is an open-source audio plugin (VST3) that visualizes psychoacoustic features of audio signals in real time. Built with [JUCE](https://juce.com/), it's designed to help you **see** how we **perceive** sound — not just how it looks on a frequency plot.
 
-Unlike typical spectrum or spectrogram analyzers, it supports perceptual visualizations such as **Mel spectrograms**, and (soon) **MFCCs**, **Chroma**, **Tempogram** etc., offering insight into how humans perceive sound.
+Unlike typical spectrum or spectrogram analyzers, it supports perceptual visualizations such as **Mel spectrograms** and **Mel-frequency cepstral coefficients (MFCCs)**, and soon also **Chroma**, **Tempogram** etc., offering insight into how humans perceive sound.
 
 > 🎧 If you're the kind of creator who trusts your ears above all — you might not need this.  
 > But if you're curious about how your audio *measures up* to what humans actually hear… welcome aboard.
