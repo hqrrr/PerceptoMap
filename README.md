@@ -11,8 +11,9 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
 
 ## Features
 
-- Real-time **Mel Spectrogram** display with perceptual frequency scaling  
-- Visual analysis of **MFCCs**, **Chroma**, **Tempogram**, and other psychoacoustic features *(planned)*  
+- Real-time **Mel Spectrogram** display with perceptual frequency scaling
+- Real-time **Mel-frequency cepstral coefficients (MFCCs)** representing timbral texture and spectral envelope
+- Visual analysis of **Chroma**, **Tempogram**, and other psychoacoustic features *(planned)*  
 - Configurable color maps
 - Optional dB scaling, log or linear frequency axis for classic linear STFT spectrogram
 - Freeze frame mode and interactive mouse hover to inspect frequency and loudness at any point
@@ -55,7 +56,7 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
 
 ---
 
-<table>
+<table style="table-layout: fixed; width: 100%;">
   <tr>
     <td align="center" valign="top">
       <img src="_pics/gui_resize_window_2.png" width="100%" alt="Resizable GUI Small" />
@@ -72,34 +73,69 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
 
 ---
 
-<table>
+<table style="table-layout: fixed; width: 100%;">
   <tr>
     <td align="center" valign="top">
       <img src="_pics/gui_freq_axis_linear_scale.png" width="100%" alt="Linear STFT spectrogram with linear frequency axis" />
       <br/>
-      <sub>Linear STFT spectrogram with <strong>linear</strong> frequency axis</sub>
+      <sub>
+        <strong>Linear STFT spectrogram with linear frequency axis:</strong>
+        <i>
+          Displays physical frequency content directly.
+        </i>
+      </sub>
     </td>
     <td align="center" valign="top">
       <img src="_pics/gui_color_magma.png" width="100%" alt="Linear STFT spectrogram with log frequency axis" />
       <br/>
-      <sub>Linear STFT spectrogram with <strong>log</strong> frequency axis</sub>
+      <sub>
+        <strong>Linear STFT spectrogram with log frequency axis:</strong>
+        <i>
+          Approximates human pitch perception. Emphasizes low-frequency resolution and compresses high-frequency bands.
+        </i>
+      </sub>
     </td>
     <td align="center" valign="top">
       <img src="_pics/gui_melspectrogram.png" width="100%" alt="Mel-scaled STFT spectrogram" />
       <br/>
-      <sub><strong>Mel-scaled</strong> STFT spectrogram</sub>
+      <sub>
+        <strong>Mel-scaled STFT spectrogram:</strong>
+        <i>
+          Reflects the nonlinear frequency resolution of human hearing. Provides a more perceptually accurate representation than simple log-scaling.
+        </i>
+      </sub>
     </td>
   </tr>
 </table>
 
+<table style="table-layout: fixed; width: 100%;">
+  <tr>
+    <td align="center" valign="top">
+      <img src="_pics/gui_mfcc.png" width="100%" alt="Mel-frequency cepstral coefficient" />
+      <br/>
+      <sub>
+        <strong>Mel-frequency cepstral coefficients (MFCCs):</strong>
+        <i>
+          Captures the spectral envelope using Discrete Cosine Transform (DCT) over Mel energies. Represents timbral texture and vocal tract shape.
+        </i>
+      </sub>
+    </td>
+    <td align="center" valign="top">
+      <img src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='500'></svg>" width="100%" alt="" />
+    </td>
+    <td align="center" valign="top">
+      <img src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='500'></svg>" width="100%" alt="" />
+    </td>
+  </tr>
+</table>
 
 ## Roadmap
 
 | Feature | Status | Description | Implementation Details |
 |-|-|-|-|
-| Linear STFT Spectrogram | ✅ Done | Classic time–frequency analysis | FFT size = 2048, Hann window, with log/linear frequency axis display|
-| Mel-Spectrogram | ✅ Done | Nonlinear frequency scaling approximating human pitch perception | 128 bands, Slaney-style: `2595 * log10(1 + f / 700)`|
-| MFCC | ⏳ Planned | Mel frequency cepstral coefficients, compact representation of timbre based on perceptual log-mel spectrum | - |
+| Linear STFT Spectrogram | ✅ Done (v0.1) | Classic time–frequency analysis | FFT size = 2048, Hann window, with log/linear frequency axis display|
+| Mel-Spectrogram | ✅ Done (v0.1) | Nonlinear frequency scaling approximating human pitch perception | 128 bands, Slaney-style: `2595 * log10(1 + f / 700)`|
+| MFCC | ✅ Done (v0.2) | Mel frequency cepstral coefficients, compact representation of timbre based on perceptual log-mel spectrum | DCT-II on log-mel spectrum, 20 coefficients, no liftering, values clipped to [−100, 100] and normalized to [0, 1] for display |
 | Chroma | ⏳ Planned | Pitch class mapping, projection of spectral energy onto 12 pitch classes (C, C#, D…) | - |
 | Tempogram / Rhythm Map | ⏳ Planned | Visualizes perceived tempo and rhythmic periodicities over time | - |
 | Spectral centroid / flatness | ⏳ Planned | Measures of brightness and tonal clarity in the spectrum | - |

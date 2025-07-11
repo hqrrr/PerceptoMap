@@ -96,7 +96,7 @@ void SpectrogramComponent::drawNextLineOfSpectrogram()
 
     if (currentMode == SpectrogramMode::Mel)
     {
-        const int melBands = 128;
+        // melspectrogram
         std::vector<float> melEnergies(melBands, 0.0f);
 
         const float minHz = 0.0f;
@@ -124,7 +124,9 @@ void SpectrogramComponent::drawNextLineOfSpectrogram()
             melBandFrequencies[m] = freq;
             int bin = static_cast<int>((freq / maxHz) * (fftSize / 2));
             bin = std::clamp(bin, 0, fftSize / 2 - 1);
-            // Simplified: directly take the FFT value corresponding to this frequency
+            // Simplified approximation: instead of applying a weighted mel filter,
+            // directly sample the FFT magnitude at the center frequency of each mel band.
+            // fast but less accurate than full mel filterbank convolution (as in librosa) but acceptable for visualization
             melEnergies[m] = fftData[bin];
         }
 
@@ -142,6 +144,63 @@ void SpectrogramComponent::drawNextLineOfSpectrogram()
 
             juce::Colour colour = getColourForValue(brightness);
             spectrogramImage.setPixelAt(x, y, colour);
+        }
+    }
+    else if (currentMode == SpectrogramMode::MFCC)
+    {
+        // Mel-frequency cepstral coefficient (MFCC)
+        std::vector<float> melEnergies(melBands, 0.0f);
+        const float maxHz = static_cast<float>(sampleRate) / 2.0f;
+        // Slaney-style mel scale
+        auto hzToMel = [](float hz) { return 2595.0f * std::log10(1.0f + hz / 700.0f); };
+        auto melToHz = [](float mel) { return 700.0f * (std::pow(10.0f, mel / 2595.0f) - 1.0f); };
+
+        float melMin = hzToMel(0.0f), melMax = hzToMel(maxHz);
+
+        // Calculate the center frequency of the mel filter and take the fft bin
+        for (int m = 0; m < melBands; ++m)
+        {
+            float mel = melMin + (melMax - melMin) * m / (melBands - 1);
+            float freq = melToHz(mel);
+            int bin = static_cast<int>((freq / maxHz) * (fftSize / 2));
+            bin = std::clamp(bin, 0, fftSize / 2 - 1);
+            // Simplified approximation: instead of applying a weighted mel filter,
+            // directly sample the FFT magnitude at the center frequency of each mel band.
+            // fast but less accurate than full mel filterbank convolution (as in librosa) but acceptable for visualization
+            melEnergies[m] = fftData[bin];
+        }
+
+        // Perform log on mel energies.
+        for (auto& e : melEnergies)
+            e = std::log(e + 1e-6f);
+
+        // Simple DCT implementation (Type-II)
+        std::vector<float> mfcc(numCoeffs, 0.0f);
+        for (int k = 0; k < numCoeffs; ++k)
+        {
+            float sum = 0.0f;
+            for (int n = 0; n < melBands; ++n)
+                sum += melEnergies[n] * std::cos(juce::MathConstants<float>::pi * k * (n + 0.5f) / melBands);
+            mfcc[k] = sum;
+        }
+
+        // Map MFCC to image columns.
+        for (int y = 0; y < imageHeight; ++y)
+        {
+            //int coeffIndex = juce::jmap(y, 0, imageHeight - 1, numCoeffs - 1, 0);
+            float frac = static_cast<float>(y) / (imageHeight - 1);
+            int coeffIndex = static_cast<int>((1.0f - frac) * (numCoeffs - 1));
+            coeffIndex = std::clamp(coeffIndex, 0, numCoeffs - 1);
+
+            float value = mfcc[coeffIndex];
+            // limit value in range [mfccMin, mfccMax]
+            float norm = juce::jlimit(mfccMin, mfccMax, value);
+            // 0 - 1 normalization
+            float brightness = juce::jmap(norm, mfccMin, mfccMax, 0.0f, 1.0f);
+
+            juce::Colour colour = getColourForValue(brightness);
+            spectrogramImage.setPixelAt(x, y, colour);
+            dBColumn[y] = value;
         }
     }
     else
@@ -227,6 +286,27 @@ void SpectrogramComponent::paint(juce::Graphics& g)
             g.setColour(juce::Colours::white);
             g.drawText(label, textBounds, juce::Justification::left);
             // draw grid line
+            g.setColour(juce::Colours::darkgrey.withAlpha(gridAlpha));
+            g.drawHorizontalLine(y, 55.0f, static_cast<float>(width));
+        }
+    }
+    else if (currentMode == SpectrogramMode::MFCC)
+    {
+        // MFCC labels
+        for (int i = 0; i < numLabels; ++i)
+        {
+            float frac = static_cast<float>(i) / (numLabels - 1);
+            int coeffIndex = static_cast<int>(frac * (numCoeffs - 1));
+            int y = static_cast<int>((1.0f - frac) * (imageHeight - 1));
+
+            // Draw label
+            juce::Rectangle<int> textBounds(2, y - 8, 60, 16);
+            g.setColour(juce::Colours::black.withAlpha(0.6f));
+            g.fillRect(textBounds);
+            g.setColour(juce::Colours::white);
+            g.drawText("MFCC " + juce::String(coeffIndex), textBounds, juce::Justification::left);
+
+            // Grid line
             g.setColour(juce::Colours::darkgrey.withAlpha(gridAlpha));
             g.drawHorizontalLine(y, 55.0f, static_cast<float>(width));
         }
@@ -337,14 +417,32 @@ void SpectrogramComponent::paint(juce::Graphics& g)
             float maxFreq = sampleRate / 2.0f;
             float freq = 0.0f;
 
+            juce::String labelText;
+
             if (currentMode == SpectrogramMode::Mel)
             {
+                // melspectrogram
                 int melIndex = juce::jlimit(0, (int)melBandFrequencies.size() - 1,
                     (int)((float)imgY / getHeight() * melBandFrequencies.size()));
                 freq = melBandFrequencies[melBandFrequencies.size() - 1 - melIndex];
+                labelText = juce::String(freq, 1) + " Hz, " + juce::String(dB, 1) + " dB";
+            }
+            else if (currentMode == SpectrogramMode::MFCC)
+            {
+                float frac = static_cast<float>(imgY) / (imageHeight - 1);
+                int coeffIndex = static_cast<int>((1.0f - frac) * (numCoeffs - 1));
+                coeffIndex = juce::jlimit(0, numCoeffs - 1, coeffIndex);
+
+                // Note: dB is actually MFCC (unitless), not decibel
+                float norm = juce::jlimit(mfccMin, mfccMax, dB);
+                float brightness = juce::jmap(norm, mfccMin, mfccMax, 0.0f, 1.0f);
+
+                labelText = "MFCC " + juce::String(coeffIndex) +
+                    ", " + juce::String(brightness, 2) + " (normalized)";
             }
             else
             {
+                // STFT spectrogram
                 if (useLogFrequency)
                 {
                     float logMinFreq = std::log10(30.0f);
@@ -356,9 +454,8 @@ void SpectrogramComponent::paint(juce::Graphics& g)
                 {
                     freq = (1.0f - (float)imgY / getHeight()) * maxFreq;
                 }
+                labelText = juce::String(freq, 1) + " Hz, " + juce::String(dB, 1) + " dB";
             }
-
-            juce::String labelText = juce::String(freq, 1) + " Hz, " + juce::String(dB, 1) + " dB";
 
             // Draw fixed box under legend bar (top right)
             const int boxWidth = 160;

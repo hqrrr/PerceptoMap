@@ -59,10 +59,12 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
     spectrogramModeBox.setTooltip(
         "Select the type of spectrogram to display.\n"
         "- Linear: Standard STFT spectrogram with linear or log frequency axis.\n"
-        "- Mel: Mel-scaled spectrogram that spaces frequencies according to nonlinear human pitch perception."
+        "- Mel: Mel-scaled spectrogram that spaces frequencies according to nonlinear human pitch perception.\n"
+        "- MFCC: Mel-frequency cepstral coefficient, representing timbral texture. Typically used in audio classification and speech recognition."
     );
     spectrogramModeBox.addItem("Linear", static_cast<int>(SpectrogramComponent::SpectrogramMode::Linear));
     spectrogramModeBox.addItem("Mel", static_cast<int>(SpectrogramComponent::SpectrogramMode::Mel));
+    spectrogramModeBox.addItem("MFCC", static_cast<int>(SpectrogramComponent::SpectrogramMode::MFCC));
 
     spectrogramModeBox.setSelectedId(static_cast<int>(SpectrogramComponent::SpectrogramMode::Linear));  // default: linear
 
@@ -70,13 +72,15 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
         {
             auto selectedId = spectrogramModeBox.getSelectedId();
             spectrogram.setSpectrogramMode(static_cast<SpectrogramComponent::SpectrogramMode>(selectedId));
+            updateLegendImage();
+            repaint();
         };
 
     // Add and configure log scale (y axis) combo box
     addAndMakeVisible(logScaleBox);
     logScaleBox.setTooltip(
         "Select frequency axis scale.\n"
-        "Note: Not applicable in Mel-spectrogram mode"
+        "Note: Not applicable in Mel-spectrogram & MFCC mode"
     );
     logScaleBox.addItem("Linear Scale", 1);
     logScaleBox.addItem("Log Scale", 2);
@@ -114,8 +118,17 @@ void SpectrogramAudioProcessorEditor::paint(juce::Graphics& g)
     // dB labels
     g.setColour(juce::Colours::white);
     g.setFont(12.0f);
-    g.drawText("-100 dB", legendX - 50, legendY, 45, legendImage.getHeight(), juce::Justification::right);
-    g.drawText("0 dB", legendX + legendImage.getWidth() + 5, legendY, 40, legendImage.getHeight(), juce::Justification::left);
+
+    if (spectrogram.getCurrentMode() == SpectrogramComponent::SpectrogramMode::MFCC)
+    {
+        g.drawText("0.0", legendX - 50, legendY, 45, legendImage.getHeight(), juce::Justification::right);
+        g.drawText("1.0", legendX + legendImage.getWidth() + 5, legendY, 40, legendImage.getHeight(), juce::Justification::left);
+    }
+    else
+    {
+        g.drawText("-100 dB", legendX - 50, legendY, 45, legendImage.getHeight(), juce::Justification::right);
+        g.drawText("0 dB", legendX + legendImage.getWidth() + 5, legendY, 40, legendImage.getHeight(), juce::Justification::left);
+    }
 }
 
 void SpectrogramAudioProcessorEditor::updateLegendImage()

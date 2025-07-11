@@ -17,8 +17,9 @@ public:
     enum class SpectrogramMode
     {
         Linear = 1,
-        Mel
-        // TODO: add MFCC, Chroma, etc.
+        Mel,
+        MFCC
+        // TODO: add Chroma, etc.
     };
 
     SpectrogramComponent();
@@ -36,6 +37,8 @@ public:
     // color map spectrogram
     juce::Colour getColourForValue(float normValue);
     ColourScheme getColourScheme() const { return colourScheme; }
+    // Getter for current drawing mode
+    SpectrogramMode getCurrentMode() const { return currentMode; }
 
 private:
     juce::Image spectrogramImage;
@@ -76,5 +79,20 @@ private:
     void mouseExit(const juce::MouseEvent& event) override;
 
     std::vector<float> melBandFrequencies;
+
+    // Mel scale:
+    // Number of Mel filterbanks used to approximate the auditory scale.
+    const int melBands = 128;
+    // MFCC:
+    // Number of MFCC coefficients to extract after DCT.
+    // Only the lowest `numCoeffs` (typically 13–20) are retained,
+    // matching librosa's `n_mfcc=20` default.
+    // These are what we visualize along the vertical axis of the MFCC image.
+    const int numCoeffs = 20;
+    // The number of MFCC labels shown, must be less than or equal to numCoeffs.
+    const int numLabels = 10;
+    // MFCC value range;
+    static constexpr float mfccMin = -100.0f;
+    static constexpr float mfccMax = 100.0f;
     
 };
