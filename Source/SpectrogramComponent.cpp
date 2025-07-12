@@ -425,7 +425,27 @@ void SpectrogramComponent::paint(juce::Graphics& g)
                 int melIndex = juce::jlimit(0, (int)melBandFrequencies.size() - 1,
                     (int)((float)imgY / getHeight() * melBandFrequencies.size()));
                 freq = melBandFrequencies[melBandFrequencies.size() - 1 - melIndex];
-                labelText = juce::String(freq, 1) + " Hz, " + juce::String(dB, 1) + " dB";
+                // get midi note name
+                juce::String noteName;
+                if (freq >= 20.0f && freq <= 20000.0f)
+                {
+                    int midiNote = (int)std::round(69 + 12 * std::log2(freq / 440.0f));
+                    if (midiNote >= 0 && midiNote <= 127)
+                    {
+                        // octave for middle C: C4
+                        noteName = juce::MidiMessage::getMidiNoteName(midiNote, true, true, 4);
+                    }
+                    else
+                    {
+                        noteName = "(out of range)";
+                    }
+                }
+                else
+                {
+                    noteName = "(out of range)";
+                }
+                // generate tooltip text
+                labelText = juce::String(freq, 1) + " Hz, " + (noteName.isNotEmpty() ? "note: " + noteName : "") + ", " + juce::String(dB, 1) + " dB";
             }
             else if (currentMode == SpectrogramMode::MFCC)
             {
@@ -454,11 +474,31 @@ void SpectrogramComponent::paint(juce::Graphics& g)
                 {
                     freq = (1.0f - (float)imgY / getHeight()) * maxFreq;
                 }
-                labelText = juce::String(freq, 1) + " Hz, " + juce::String(dB, 1) + " dB";
+                // get midi note name
+                juce::String noteName;
+                if (freq >= 20.0f && freq <= 20000.0f)
+                {
+                    int midiNote = (int)std::round(69 + 12 * std::log2(freq / 440.0f));
+                    if (midiNote >= 0 && midiNote <= 127)
+                    {
+                        // octave for middle C: C4
+                        noteName = juce::MidiMessage::getMidiNoteName(midiNote, true, true, 4);
+                    }
+                    else
+                    {
+                        noteName = "(out of range)";
+                    }
+                }
+                else
+                {
+                    noteName = "(out of range)";
+                }
+                // generate tooltip text
+                labelText = juce::String(freq, 1) + " Hz, " + (noteName.isNotEmpty() ? "note: " + noteName : "") + ", " + juce::String(dB, 1) + " dB";
             }
 
             // Draw fixed box under legend bar (top right)
-            const int boxWidth = 160;
+            const int boxWidth = 240;
             const int boxHeight = 20;
             const int padding = 5;
 
