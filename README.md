@@ -9,11 +9,12 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
 > 🎧 If you're the kind of creator who trusts your ears above all — you might not need this.  
 > But if you're curious about how your audio *measures up* to what humans actually hear… welcome aboard.
 
-## Features
+## Key Features
 
 - Real-time **Mel Spectrogram** display with perceptual frequency scaling
 - Real-time **Mel-frequency cepstral coefficients (MFCCs)** representing timbral texture and spectral envelope
-- Visual analysis of **Chroma**, **Tempogram**, and other psychoacoustic features *(planned)*  
+- Real-time **Spectral Centroid** tracking to visualize spectral brightness (center of mass of STFT spectrum)
+- Visual analysis of **Chroma**, **Tempogram**, and other psychoacoustic features *(planned)* 
 - Configurable color maps
 - Optional dB scaling, log or linear frequency axis for classic linear STFT spectrogram
 - Freeze frame mode and interactive mouse hover to inspect frequency and loudness at any point
@@ -24,6 +25,23 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
   <img src="_pics/gui_ableton_live_12.png" width="100%" alt="GUI" />
   <sub>Plugin User Interface in Ableton Live 12</sub>
 </p>
+
+---
+
+<table style="table-layout: fixed; width: 100%;">
+  <tr>
+    <td align="center" valign="top">
+      <img src="_pics/gui_resize_window_2.png" width="100%" alt="Resizable GUI Small" />
+      <br/>
+      <sub><strong>Resizable GUI</strong><br/>Window can shrink to fit minimal layout</sub>
+    </td>
+    <td align="center" valign="top">
+      <img src="_pics/gui_resize_window_1.png" width="100%" alt="Resizable GUI Large" />
+      <br/>
+      <sub><strong>Resizable GUI</strong><br/>Window expands for detailed viewing</sub>
+    </td>
+  </tr>
+</table>
 
 ---
 
@@ -49,24 +67,15 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
 
 ---
 
-<p align="center">
-  <img src="_pics/gui_mouse_info.png" width="100%" alt="Hover Frequency Readout" />
-  <sub><strong>Hover Readout</strong><br/>Displays precise frequency and dB level under the mouse pointer</sub>
-</p>
-
----
-
 <table style="table-layout: fixed; width: 100%;">
   <tr>
     <td align="center" valign="top">
-      <img src="_pics/gui_resize_window_2.png" width="100%" alt="Resizable GUI Small" />
-      <br/>
-      <sub><strong>Resizable GUI</strong><br/>Window can shrink to fit minimal layout</sub>
+      <img src="_pics/gui_mouse_info.png" width="100%" alt="Hover Frequency Readout" />
+      <sub><strong>Hover Readout</strong><br/>Displays precise frequency, dB level, and corresponding MIDI note (C4 = Middle C) <span style="color: gray;">[added in v0.3]</span> under the mouse pointer.</sub>
     </td>
     <td align="center" valign="top">
-      <img src="_pics/gui_resize_window_1.png" width="100%" alt="Resizable GUI Large" />
-      <br/>
-      <sub><strong>Resizable GUI</strong><br/>Window expands for detailed viewing</sub>
+      <img src="_pics/gui_color_scheme_floor_value.png" width="100%" alt="Hover Frequency Readout" />
+      <sub><strong>Adjustable dB Floor Slider</strong><br/>Controls the minimum dB threshold for color brightness, helping visualize low-level signals. <span style="color: gray;">[added in v0.3]</span></sub>
     </td>
   </tr>
 </table>
@@ -116,18 +125,26 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
       <sub>
         <strong>Mel-frequency cepstral coefficients (MFCCs):</strong>
         <i>
-          Captures the spectral envelope using Discrete Cosine Transform (DCT) over Mel energies. Represents timbral texture and vocal tract shape.
+          Captures the spectral envelope using Discrete Cosine Transform (DCT) over Mel energies. Represents timbral texture and vocal tract shape. <span style="color: gray;">[added in v0.2]</span>
+        </i>
+      </sub>
+    </td>
+    <td align="center" valign="top">
+      <img src="_pics/gui_spectral_centroid.png" width="100%" alt="blank" />
+      <br/>
+      <sub>
+        <strong>Spectral Centroid:</strong>
+        <i>
+          Indicates the "center of mass" of the spectrum. Tracks brightness and perceptual sharpness by showing where the dominant frequencies are concentrated over time. <span style="color: gray;">[added in v0.3]</span>
         </i>
       </sub>
     </td>
     <td align="center" valign="top">
       <img src="_pics/blank_800x630.png" width="100%" alt="blank" />
     </td>
-    <td align="center" valign="top">
-      <img src="_pics/blank_800x630.png" width="100%" alt="blank" />
-    </td>
   </tr>
 </table>
+
 
 ## Roadmap
 
@@ -136,9 +153,10 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
 | Linear STFT Spectrogram | ✅ Done (v0.1) | Classic time–frequency analysis | FFT size = 2048, Hann window, with log/linear frequency axis display|
 | Mel-Spectrogram | ✅ Done (v0.1) | Nonlinear frequency scaling approximating human pitch perception | 128 bands, Slaney-style: `2595 * log10(1 + f / 700)`|
 | MFCC | ✅ Done (v0.2) | Mel frequency cepstral coefficients, compact representation of timbre based on perceptual log-mel spectrum | DCT-II on log-mel spectrum, 20 coefficients, no liftering, values clipped to [−100, 100] and normalized to [0, 1] for display |
+| Spectral Centroid (STFT-based) | ✅ Done (v0.3) | Tracks the "center of mass" of the spectrum; correlates with brightness and sharpness | Computed from linear STFT magnitude spectrum with smoothing (Exponential Moving Average), overlaid as a curve on the STFT spectrogram |
 | Chroma | ⏳ Planned | Pitch class mapping, projection of spectral energy onto 12 pitch classes (C, C#, D…) | - |
 | Tempogram / Rhythm Map | ⏳ Planned | Visualizes perceived tempo and rhythmic periodicities over time | - |
-| Spectral centroid / flatness | ⏳ Planned | Measures of brightness and tonal clarity in the spectrum | - |
+| Spectral Flatness / Contrast | ⏳ Planned | Measures of timbral characteristics | - |
 
 
 ## Why develop this plugin?
