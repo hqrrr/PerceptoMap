@@ -60,11 +60,13 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
         "Select the type of spectrogram to display.\n"
         "- Linear: Standard STFT spectrogram with linear or log frequency axis.\n"
         "- Mel: Mel-scaled spectrogram that spaces frequencies according to nonlinear human pitch perception.\n"
-        "- MFCC: Mel-frequency cepstral coefficient, representing timbral texture. Typically used in audio classification and speech recognition."
+        "- MFCC: Mel-frequency cepstral coefficient, representing timbral texture. Typically used in audio classification and speech recognition.\n"
+        "- Spectral Centroid: STFT spectrogram with added curves showing where the energy is centered and how widely it is spread across frequencies."
     );
     spectrogramModeBox.addItem("Linear", static_cast<int>(SpectrogramComponent::SpectrogramMode::Linear));
     spectrogramModeBox.addItem("Mel", static_cast<int>(SpectrogramComponent::SpectrogramMode::Mel));
     spectrogramModeBox.addItem("MFCC", static_cast<int>(SpectrogramComponent::SpectrogramMode::MFCC));
+    spectrogramModeBox.addItem("Spectral Centroid", static_cast<int>(SpectrogramComponent::SpectrogramMode::LinearWithCentroid));
 
     spectrogramModeBox.setSelectedId(static_cast<int>(SpectrogramComponent::SpectrogramMode::Linear));  // default: linear
 
@@ -79,11 +81,11 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
     // Add and configure log scale (y axis) combo box
     addAndMakeVisible(logScaleBox);
     logScaleBox.setTooltip(
-        "Select frequency axis scale.\n"
+        "Select frequency y axis scale.\n"
         "Note: Not applicable in Mel-spectrogram & MFCC mode"
     );
-    logScaleBox.addItem("Linear Scale", 1);
-    logScaleBox.addItem("Log Scale", 2);
+    logScaleBox.addItem("Linear Y", 1);
+    logScaleBox.addItem("Log Y", 2);
 
     logScaleBox.setSelectedId(2);   // default: log
     logScaleBox.onChange = [this]()

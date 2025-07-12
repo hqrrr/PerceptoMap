@@ -18,7 +18,8 @@ public:
     {
         Linear = 1,
         Mel,
-        MFCC
+        MFCC,
+        LinearWithCentroid
         // TODO: add Chroma, etc.
     };
 
@@ -99,5 +100,15 @@ private:
     // MFCC value range;
     static constexpr float mfccMin = -100.0f;
     static constexpr float mfccMax = 100.0f;
+
+    // Spectral centroid
+    float computeSpectralCentroid(const float* magnitude, int numBins) const;
+    int lastCentroidY = -1;
+    // Sliding average to smooth the centroid curve
+    float centroidSmoothed = 0.0f;
+    bool hasPreviousCentroid = false;
+    // larger values such as 0.9 are smoother
+    // smaller values such as 0.7 are more sensitive
+    const float smoothingFactor = 0.8f;
     
 };

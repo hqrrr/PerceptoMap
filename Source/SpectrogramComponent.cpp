@@ -203,6 +203,111 @@ void SpectrogramComponent::drawNextLineOfSpectrogram()
             dBColumn[y] = value;
         }
     }
+    else if (currentMode == SpectrogramMode::LinearWithCentroid)
+    {
+        float rawCentroidHz = computeSpectralCentroid(fftData, fftSize / 2);
+
+        if (!hasPreviousCentroid || rawCentroidHz <= 0.0f || rawCentroidHz > maxFreq)
+        {
+            centroidSmoothed = rawCentroidHz;
+            hasPreviousCentroid = true;
+        }
+        else
+        {
+            // Sliding average filter
+            centroidSmoothed = smoothingFactor * centroidSmoothed + (1.0f - smoothingFactor) * rawCentroidHz;
+        }
+
+        for (int y = 0; y < imageHeight; ++y)
+        {
+            int binIndex = 0;
+
+            if (useLogFrequency)
+            {
+                float logMinFreq = std::log10(30.0f);
+                float logMaxFreq = std::log10(maxFreq);
+                float frac = 1.0f - static_cast<float>(y) / imageHeight;
+
+                float logFreq = logMinFreq + frac * (logMaxFreq - logMinFreq);
+                float freq = std::pow(10.0f, logFreq);
+                binIndex = static_cast<int>((freq / maxFreq) * (fftSize / 2));
+            }
+            else
+            {
+                float frac = 1.0f - static_cast<float>(y) / imageHeight;
+                binIndex = static_cast<int>(frac * (fftSize / 2));
+            }
+
+            binIndex = std::clamp(binIndex, 0, fftSize / 2 - 1);
+
+            float magnitude = fftData[binIndex];
+            float dB = 20.0f * std::log10(magnitude + 1e-6f);
+            float clippedDB = juce::jlimit(floorDb, 0.0f, dB);
+            dBColumn[y] = clippedDB;
+            float brightness = juce::jmap(clippedDB, floorDb, 0.0f, 0.0f, 1.0f);
+
+            juce::Colour colour = getColourForValue(brightness);
+            spectrogramImage.setPixelAt(x, y, colour);
+        }
+
+        // Draw spectral centroid
+        auto mapHzToY = [imageHeight = this->getHeight(), this, maxFreq](float freqHz) -> int
+        {
+            if (useLogFrequency)
+            {
+                float logMinFreq = std::log10(30.0f);
+                float logMaxFreq = std::log10(maxFreq);
+                float logFreq = std::log10(freqHz);
+                float normY = 1.0f - (logFreq - logMinFreq) / (logMaxFreq - logMinFreq);
+                return juce::jlimit(0, imageHeight - 1, static_cast<int>(normY * imageHeight));
+            }
+            else
+            {
+                float normY = 1.0f - freqHz / maxFreq;
+                return juce::jlimit(0, imageHeight - 1, static_cast<int>(normY * imageHeight));
+            }
+        };
+
+        int centroidY = mapHzToY(centroidSmoothed);
+
+        // Define highlight colors
+        juce::Colour centroidColor;
+
+        switch (colourScheme)
+        {
+        case ColourScheme::Grayscale:
+            centroidColor = juce::Colour::fromRGB(0, 200, 255);   // blue
+            break;
+        case ColourScheme::Magma:
+            centroidColor = juce::Colour::fromRGB(0, 255, 128);   // light green
+            break;
+
+        default:
+            centroidColor = juce::Colour::fromRGB(255, 255, 255);   // white
+            break;
+        }
+
+        // Draw centroid as thick line
+        if (lastCentroidY >= 0)
+        {
+            juce::Graphics g(spectrogramImage);
+            g.setColour(centroidColor);
+            g.drawLine((float)(x - 1), (float)lastCentroidY,
+                (float)x, (float)centroidY,
+                2.0f);  // line width
+        }
+        else
+        {
+            // If it is the first centroid and there is no previous value, draw a small vertical line.
+            for (int dy = -1; dy <= 1; ++dy)
+            {
+                int y = juce::jlimit(0, imageHeight - 1, centroidY + dy);
+                spectrogramImage.setPixelAt(x, y, centroidColor);
+            }
+        }
+
+        lastCentroidY = centroidY;
+    }
     else
     {
         // default: linear STFT spectrogram
@@ -313,7 +418,7 @@ void SpectrogramComponent::paint(juce::Graphics& g)
     }
     else
     {
-        // log y axis or linear, for linear STFT spectrogram
+        // log y axis or linear, for linear STFT spectrogram & with spectral centroid + bandwidth
         if (useLogFrequency)
         {
             std::vector<float> freqsToLabel = { 30, 64, 128, 256, 512, 1024, 2048, 4096,
@@ -462,7 +567,7 @@ void SpectrogramComponent::paint(juce::Graphics& g)
             }
             else
             {
-                // STFT spectrogram
+                // STFT spectrogram & with spectral centroid + bandwidth
                 if (useLogFrequency)
                 {
                     float logMinFreq = std::log10(30.0f);
@@ -514,6 +619,32 @@ void SpectrogramComponent::paint(juce::Graphics& g)
         }
     }
 
+}
+
+// Return the center frequency in Hz units.
+float SpectrogramComponent::computeSpectralCentroid(const float* magnitude, int numBins) const
+{
+    float weightedSum = 0.0f;
+    float energySum = 0.0f;
+    float freqSquaredSum = 0.0f;
+
+    for (int i = 0; i < numBins; ++i)
+    {
+        float mag = magnitude[i];
+        float power = mag * mag;
+        float binWidth = sampleRate / fftSize;
+        float freq = i * binWidth;
+        weightedSum += freq * power;
+        energySum += power;
+        freqSquaredSum += freq * freq * power;
+    }
+    // Avoid numerical instability at extremely low signal energies (e.g., silent passages).
+    if (energySum < 1e-6f)
+        return 0.0f;
+
+    float centroid = (energySum > 0.0f) ? weightedSum / energySum : 0.0f;
+
+    return centroid;
 }
 
 juce::Colour SpectrogramComponent::getColourForValue(float value)
