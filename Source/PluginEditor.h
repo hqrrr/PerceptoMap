@@ -52,5 +52,8 @@ private:
     // dropdown menu for spectrogram mode, e.g. linear / mel-scaled ...
     juce::ComboBox spectrogramModeBox;
 
+    // slider to change the lower limit (floor value) of all dB colour scheme
+    juce::Slider floorDbSlider;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SpectrogramAudioProcessorEditor)
 };

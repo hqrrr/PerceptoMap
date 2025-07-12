@@ -91,7 +91,25 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
         bool useLog = logScaleBox.getSelectedId() == 2;
         spectrogram.setUseLogFrequency(useLog);
     };
+
+    // Add and configure dB floor slider (lower limit)
+    addAndMakeVisible(floorDbSlider);
+    floorDbSlider.setTooltip(
+        "Set the dB floor (minimum brightness threshold) for spectrogram display.\n"
+        "Note: Not applicable in MFCC mode"
+    );
+    floorDbSlider.setRange(-200.0, -1.0, 1.0);  // floor dB from -400 to -20
+    floorDbSlider.setValue(-100.0); // default: -100 dB
+    floorDbSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 80, 20);
     
+    floorDbSlider.onValueChange = [this]()
+    {
+        float db = (float)floorDbSlider.getValue();
+        spectrogram.setFloorDb(db);
+        updateLegendImage();
+        repaint();
+    };
+
 }
 
 SpectrogramAudioProcessorEditor::~SpectrogramAudioProcessorEditor() noexcept
@@ -126,7 +144,7 @@ void SpectrogramAudioProcessorEditor::paint(juce::Graphics& g)
     }
     else
     {
-        g.drawText("-100 dB", legendX - 50, legendY, 45, legendImage.getHeight(), juce::Justification::right);
+        g.drawText(juce::String((int)spectrogram.getFloorDb()) + " dB", legendX - 50, legendY, 45, legendImage.getHeight(), juce::Justification::right);
         g.drawText("0 dB", legendX + legendImage.getWidth() + 5, legendY, 40, legendImage.getHeight(), juce::Justification::left);
     }
 }
@@ -155,11 +173,16 @@ void SpectrogramAudioProcessorEditor::resized()
     auto topRow = area.removeFromTop(30);
     freezeButton.setBounds(topRow.removeFromLeft(100).reduced(5));
 
-    // second row: dropdown menu
+    // second row: dropdown menu etc.
     auto secondRow = area.removeFromTop(30);
+    // colour scheme
     colourSchemeBox.setBounds(secondRow.removeFromLeft(110).reduced(5));
+    // spectrogram mode
     spectrogramModeBox.setBounds(secondRow.removeFromLeft(110).reduced(5));
+    // y axis type: log or linear (for linear STFT spectrogram)
     logScaleBox.setBounds(secondRow.removeFromLeft(110).reduced(5));
+    // slider floor value colour scheme
+    floorDbSlider.setBounds(secondRow.removeFromLeft(200).reduced(5));
 
     // rest: spectrogram
     spectrogram.setBounds(area);

@@ -138,9 +138,9 @@ void SpectrogramComponent::drawNextLineOfSpectrogram()
             melIndex = std::clamp(melIndex, 0, melBands - 1);
 
             float dB = 20.0f * std::log10(melEnergies[melIndex] + 1e-6f);
-            float clippedDB = juce::jlimit(-100.0f, 0.0f, dB);
+            float clippedDB = juce::jlimit(floorDb, 0.0f, dB);
             dBColumn[y] = clippedDB;
-            float brightness = juce::jmap(clippedDB, -100.0f, 0.0f, 0.0f, 1.0f);
+            float brightness = juce::jmap(clippedDB, floorDb, 0.0f, 0.0f, 1.0f);
 
             juce::Colour colour = getColourForValue(brightness);
             spectrogramImage.setPixelAt(x, y, colour);
@@ -231,9 +231,9 @@ void SpectrogramComponent::drawNextLineOfSpectrogram()
             // convert magnitude to dB
             float magnitude = fftData[binIndex];
             float dB = 20.0f * std::log10(magnitude + 1e-6f); // avoid log(0)
-            float clippedDB = juce::jlimit(-100.0f, 0.0f, dB);
+            float clippedDB = juce::jlimit(floorDb, 0.0f, dB);
             dBColumn[y] = clippedDB;
-            float brightness = juce::jmap(clippedDB, -100.0f, 0.0f, 0.0f, 1.0f);
+            float brightness = juce::jmap(clippedDB, floorDb, 0.0f, 0.0f, 1.0f);
 
             juce::Colour colour = getColourForValue(brightness);
             spectrogramImage.setPixelAt(x, y, colour);

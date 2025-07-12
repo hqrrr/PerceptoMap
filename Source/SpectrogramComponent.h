@@ -37,6 +37,9 @@ public:
     // color map spectrogram
     juce::Colour getColourForValue(float normValue);
     ColourScheme getColourScheme() const { return colourScheme; }
+    // set and get floor value for spectrogram colour scheme
+    void setFloorDb(float db) { floorDb = juce::jlimit(-200.0f, -1.0f, db); }
+    float getFloorDb() const { return floorDb; }
     // Getter for current drawing mode
     SpectrogramMode getCurrentMode() const { return currentMode; }
 
@@ -61,6 +64,8 @@ private:
 
     bool isFrozen = false;
 
+    // spectrogram lower limit dB value (floor value), default: -100 dB
+    float floorDb = -100.0f;
     // alpha value grid lines
     float gridAlpha = 0.75f;
     // color map spectrogram
