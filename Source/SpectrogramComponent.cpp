@@ -214,8 +214,8 @@ void SpectrogramComponent::drawNextLineOfSpectrogram()
         }
         else
         {
-            // Sliding average filter
-            centroidSmoothed = smoothingFactor * centroidSmoothed + (1.0f - smoothingFactor) * rawCentroidHz;
+            // Exponential Moving Average
+            centroidSmoothed += smoothingFactor * (rawCentroidHz - centroidSmoothed);
         }
 
         for (int y = 0; y < imageHeight; ++y)

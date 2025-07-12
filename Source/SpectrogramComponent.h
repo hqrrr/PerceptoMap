@@ -104,11 +104,11 @@ private:
     // Spectral centroid
     float computeSpectralCentroid(const float* magnitude, int numBins) const;
     int lastCentroidY = -1;
-    // Sliding average to smooth the centroid curve
+    // Exponential Moving Average to smooth the centroid curve
     float centroidSmoothed = 0.0f;
     bool hasPreviousCentroid = false;
-    // larger values such as 0.9 are smoother
-    // smaller values such as 0.7 are more sensitive
-    const float smoothingFactor = 0.8f;
+    // Values of close to 1 have less of a smoothing effect and give greater weight to recent changes in the data, 
+    // while values of closer to 0 have a greater smoothing effect and are less responsive to recent changes.
+    const float smoothingFactor = 0.3f;
     
 };
