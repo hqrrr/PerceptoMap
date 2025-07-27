@@ -192,6 +192,13 @@ You can download the latest version of **PerceptoMap** from the [Releases](https
 
 Not yet prebuilt — If you're a developer or familiar with JUCE/Xcode, please build from source, see instructions for developers below.
 
+#### Linux (v0.3, built by @FranklyFlawless)
+1. Download the plugin `.zip` file from the [Releases](https://github.com/hqrrr/PerceptoMap/releases)
+2. Unzip the file
+3. Copy `.vst3` **plugin folder** to your VST3 directory
+
+Special thanks to @FranklyFlawless from the KVR Audio forum for building and testing v0.3 on Debian 12 Bookworm (DAW: Ardour 8.12.0).
+
 > After installation, restart your DAW and run a plugin rescan if needed.
 
 ## Build Instructions for Developers
