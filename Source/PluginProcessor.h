@@ -1,7 +1,11 @@
 /*
   ==============================================================================
 
-    This file contains the basic framework code for a JUCE plugin processor.
+    PluginProcessor.h
+    Part of the PerceptoMap audio plugin project.
+
+    Author: hqrrr
+    GitHub: https://github.com/hqrrr/PerceptoMap
 
   ==============================================================================
 */

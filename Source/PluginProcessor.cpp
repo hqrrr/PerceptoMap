@@ -1,7 +1,11 @@
 /*
   ==============================================================================
 
-    This file contains the basic framework code for a JUCE plugin processor.
+    PluginProcessor.cpp
+    Handles audio input and forwards data to the spectrogram visualizer.
+
+    Author: hqrrr
+    GitHub: https://github.com/hqrrr/PerceptoMap
 
   ==============================================================================
 */

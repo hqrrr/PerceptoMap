@@ -1,3 +1,15 @@
+/*
+  ==============================================================================
+
+    SpectrogramComponent.h
+    Defines the component responsible for rendering the spectrogram.
+
+    Author: hqrrr
+    GitHub: https://github.com/hqrrr/PerceptoMap
+
+  ==============================================================================
+*/
+
 #pragma once
 
 #include <JuceHeader.h>
@@ -11,7 +23,9 @@ public:
     {
         Classic = 1,
         Grayscale,
-        Magma
+        GrayscaleEnhanced,
+        Magma,
+        MagmaEnhanced
     };
     // spectrogram mode, e.g. linear / mel-scaled ...
     enum class SpectrogramMode
@@ -35,12 +49,18 @@ public:
     void setColourScheme(ColourScheme scheme);
     void setSpectrogramMode(SpectrogramMode mode);
     void setFrozen(bool shouldFreeze);
+
     // color map spectrogram
     juce::Colour getColourForValue(float normValue);
     ColourScheme getColourScheme() const { return colourScheme; }
     // set and get floor value for spectrogram colour scheme
     void setFloorDb(float db) { floorDb = juce::jlimit(-200.0f, -1.0f, db); }
     float getFloorDb() const { return floorDb; }
+    // set and get norm factor for spectrogram dB values
+    float normFactor = 1.0f;
+    void setNormFactor(float f) { normFactor = juce::jlimit(0.001f, 10.0f, f); }
+    float getNormFactor() const { return normFactor; }
+
     // Getter for current drawing mode
     SpectrogramMode getCurrentMode() const { return currentMode; }
 
@@ -110,5 +130,22 @@ private:
     // Values of close to 1 have less of a smoothing effect and give greater weight to recent changes in the data, 
     // while values of closer to 0 have a greater smoothing effect and are less responsive to recent changes.
     const float smoothingFactor = 0.3f;
-    
+
 };
+
+// color schemes
+namespace ColourMaps
+{
+    static const juce::Colour magmaColors[10] = {
+            juce::Colour::fromRGB(0, 0, 4),          // #000004
+            juce::Colour::fromRGB(24, 15, 61),       // #180f3d
+            juce::Colour::fromRGB(68, 15, 118),      // #440f76
+            juce::Colour::fromRGB(114, 31, 129),     // #721f81
+            juce::Colour::fromRGB(158, 47, 127),     // #9e2f7f
+            juce::Colour::fromRGB(205, 64, 113),     // #cd4071
+            juce::Colour::fromRGB(241, 96, 93),      // #f1605d
+            juce::Colour::fromRGB(253, 150, 104),    // #fd9668
+            juce::Colour::fromRGB(254, 202, 141),    // #feca8d
+            juce::Colour::fromRGB(252, 253, 191)     // #fcfdbf
+    };
+}

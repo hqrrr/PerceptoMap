@@ -1,7 +1,11 @@
 /*
   ==============================================================================
 
-    This file contains the basic framework code for a JUCE plugin editor.
+    PluginEditor.h
+    GUI interface for the PerceptoMap spectrogram plugin.
+
+    Author: hqrrr
+    GitHub: https://github.com/hqrrr/PerceptoMap
 
   ==============================================================================
 */
@@ -54,6 +58,8 @@ private:
 
     // slider to change the lower limit (floor value) of all dB colour scheme
     juce::Slider floorDbSlider;
+    // slider to change the norm factor of dB values
+    juce::Slider normFactorSlider;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SpectrogramAudioProcessorEditor)
 };

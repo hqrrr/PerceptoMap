@@ -1,3 +1,15 @@
+/*
+  ==============================================================================
+
+    SpectrogramComponent.cpp
+    Implements STFT processing, visualization logic, and user interaction.
+
+    Author: hqrrr
+    GitHub: https://github.com/hqrrr/PerceptoMap
+
+  ==============================================================================
+*/
+
 #include "SpectrogramComponent.h"
 
 SpectrogramComponent::SpectrogramComponent()
@@ -137,7 +149,8 @@ void SpectrogramComponent::drawNextLineOfSpectrogram()
             int melIndex = juce::jmap(y, 0, imageHeight - 1, melBands - 1, 0);
             melIndex = std::clamp(melIndex, 0, melBands - 1);
 
-            float dB = 20.0f * std::log10(melEnergies[melIndex] + 1e-6f);
+            float scaled = melEnergies[melIndex] * normFactor;
+            float dB = 20.0f * std::log10(scaled + 1e-6f);
             float clippedDB = juce::jlimit(floorDb, 0.0f, dB);
             dBColumn[y] = clippedDB;
             float brightness = juce::jmap(clippedDB, floorDb, 0.0f, 0.0f, 1.0f);
@@ -172,7 +185,10 @@ void SpectrogramComponent::drawNextLineOfSpectrogram()
 
         // Perform log on mel energies.
         for (auto& e : melEnergies)
-            e = std::log(e + 1e-6f);
+        {
+            float scaled = e * normFactor;
+            e = std::log(scaled + 1e-6f);
+        }
 
         // Simple DCT implementation (Type-II)
         std::vector<float> mfcc(numCoeffs, 0.0f);
@@ -240,7 +256,7 @@ void SpectrogramComponent::drawNextLineOfSpectrogram()
 
             binIndex = std::clamp(binIndex, 0, fftSize / 2 - 1);
 
-            float magnitude = fftData[binIndex];
+            float magnitude = fftData[binIndex] * normFactor;
             float dB = 20.0f * std::log10(magnitude + 1e-6f);
             float clippedDB = juce::jlimit(floorDb, 0.0f, dB);
             dBColumn[y] = clippedDB;
@@ -334,7 +350,7 @@ void SpectrogramComponent::drawNextLineOfSpectrogram()
             binIndex = std::clamp(binIndex, 0, fftSize / 2 - 1);
 
             // convert magnitude to dB
-            float magnitude = fftData[binIndex];
+            float magnitude = fftData[binIndex] * normFactor;
             float dB = 20.0f * std::log10(magnitude + 1e-6f); // avoid log(0)
             float clippedDB = juce::jlimit(floorDb, 0.0f, dB);
             dBColumn[y] = clippedDB;
@@ -659,22 +675,64 @@ juce::Colour SpectrogramComponent::getColourForValue(float value)
     case ColourScheme::Grayscale:
         return juce::Colour::fromFloatRGBA(value, value, value, 1.0f);
 
+    case ColourScheme::GrayscaleEnhanced:
+    {
+        float adjusted = 0.0f;
+
+        if (value <= 0.8f)
+        {
+            adjusted = 0.25f * value;  // y=[0.0, 0.2]
+        }
+        else if (value <= 0.9f)
+        {
+            adjusted = 0.2f + 1.0f * (value - 0.8f);  // y=[0.2, 0.3]
+        }
+        else if (value <= 0.95f)
+        {
+            adjusted = 0.3f + 5.0f * (value - 0.9f);  // y=[0.3, 0.55]
+        }
+        else
+        {
+            adjusted = 0.55f + 9.0f * (value - 0.95f);  // y=[0.55, 1.0]
+        }
+
+        // Clip to [0, 1] to avoid rounding issues
+        adjusted = juce::jlimit(0.0f, 1.0f, adjusted);
+
+        return juce::Colour::fromFloatRGBA(adjusted, adjusted, adjusted, 1.0f);
+    }
+
     case ColourScheme::Magma:
     {
-        static const juce::Colour magmaColors[10] = {
-            juce::Colour::fromRGB(0, 0, 4),          // #000004
-            juce::Colour::fromRGB(24, 15, 61),       // #180f3d
-            juce::Colour::fromRGB(68, 15, 118),      // #440f76
-            juce::Colour::fromRGB(114, 31, 129),     // #721f81
-            juce::Colour::fromRGB(158, 47, 127),     // #9e2f7f
-            juce::Colour::fromRGB(205, 64, 113),     // #cd4071
-            juce::Colour::fromRGB(241, 96, 93),      // #f1605d
-            juce::Colour::fromRGB(253, 150, 104),    // #fd9668
-            juce::Colour::fromRGB(254, 202, 141),    // #feca8d
-            juce::Colour::fromRGB(252, 253, 191)     // #fcfdbf
-        };
-
+        using ColourMaps::magmaColors;
         float scaled = value * 9.0f;
+        int idxLow = static_cast<int>(std::floor(scaled));
+        int idxHigh = std::min(idxLow + 1, 9);
+        float t = scaled - idxLow;
+
+        juce::Colour c1 = magmaColors[idxLow];
+        juce::Colour c2 = magmaColors[idxHigh];
+
+        return c1.interpolatedWith(c2, t);
+    }
+
+    case ColourScheme::MagmaEnhanced:
+    {
+        using ColourMaps::magmaColors;
+        float adjusted = 0.0f;
+        if (value <= 0.8f)
+            adjusted = 0.25f * value;  // y=[0.0, 0.2]
+        else if (value <= 0.9f)
+            adjusted = 0.2f + 1.0f * (value - 0.8f);  // y=[0.2, 0.3]
+        else if (value <= 0.95f)
+            adjusted = 0.3f + 5.0f * (value - 0.9f);  // y=[0.3, 0.55]
+        else
+            adjusted = 0.55f + 9.0f * (value - 0.95f);  // y=[0.55, 1.0]
+
+        adjusted = juce::jlimit(0.0f, 1.0f, adjusted);
+
+        // === Magma color lookup ===
+        float scaled = adjusted * 9.0f;
         int idxLow = static_cast<int>(std::floor(scaled));
         int idxHigh = std::min(idxLow + 1, 9);
         float t = scaled - idxLow;
@@ -688,6 +746,7 @@ juce::Colour SpectrogramComponent::getColourForValue(float value)
     default:
         return juce::Colours::black;
     }
+
 }
 
 void SpectrogramComponent::resized()

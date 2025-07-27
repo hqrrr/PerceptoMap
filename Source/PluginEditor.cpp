@@ -1,7 +1,11 @@
 /*
   ==============================================================================
 
-    This file contains the basic framework code for a JUCE plugin editor.
+    PluginEditor.cpp
+    Implements the GUI layout, including spectrogram view, controls, and legend.
+
+    Author: hqrrr
+    GitHub: https://github.com/hqrrr/PerceptoMap
 
   ==============================================================================
 */
@@ -17,7 +21,7 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
     // Set initial editor window size
     setSize(800, 600);
     setResizable(true, true);
-    setResizeLimits(400, 300, 1600, 1400);
+    setResizeLimits(200, 200, 3000, 3000);
 
     // Add and show the spectrogram component
     addAndMakeVisible(spectrogram);
@@ -41,7 +45,9 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
     colourSchemeBox.setTooltip("Select the color map used for the spectrogram display.");
     colourSchemeBox.addItem("Classic", static_cast<int>(SpectrogramComponent::ColourScheme::Classic));
     colourSchemeBox.addItem("Magma", static_cast<int>(SpectrogramComponent::ColourScheme::Magma));
+    colourSchemeBox.addItem("Magma+", static_cast<int>(SpectrogramComponent::ColourScheme::MagmaEnhanced));
     colourSchemeBox.addItem("Grayscale", static_cast<int>(SpectrogramComponent::ColourScheme::Grayscale));
+    colourSchemeBox.addItem("Grayscale+", static_cast<int>(SpectrogramComponent::ColourScheme::GrayscaleEnhanced));
 
     colourSchemeBox.setSelectedId(static_cast<int>(SpectrogramComponent::ColourScheme::Classic));
     // Create color legend (horizontal bar)
@@ -108,6 +114,25 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
     {
         float db = (float)floorDbSlider.getValue();
         spectrogram.setFloorDb(db);
+        updateLegendImage();
+        repaint();
+    };
+
+    // Add and configure norm factor slider (scale/brightness gain of dB values)
+    addAndMakeVisible(normFactorSlider);
+    normFactorSlider.setTooltip(
+        "Set brightness scale factor (norm factor) for spectrogram display.\n"
+        "Useful for adjusting overall dB level display."
+    );
+    normFactorSlider.setRange(0.001, 2.0, 0.001); // allow finer range
+    normFactorSlider.setSkewFactorFromMidPoint(1.0); // nonlinear feel
+    normFactorSlider.setValue(1.0);  // default
+    normFactorSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 80, 20);
+
+    normFactorSlider.onValueChange = [this]()
+    {
+        float scale = (float)normFactorSlider.getValue();
+        spectrogram.setNormFactor(scale);
         updateLegendImage();
         repaint();
     };
@@ -185,6 +210,8 @@ void SpectrogramAudioProcessorEditor::resized()
     logScaleBox.setBounds(secondRow.removeFromLeft(110).reduced(5));
     // slider floor value colour scheme
     floorDbSlider.setBounds(secondRow.removeFromLeft(200).reduced(5));
+    // slider norm factor
+    normFactorSlider.setBounds(secondRow.removeFromLeft(200).reduced(5));
 
     // rest: spectrogram
     spectrogram.setBounds(area);
