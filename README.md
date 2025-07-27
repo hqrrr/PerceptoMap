@@ -16,8 +16,10 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
 - Real-time **Spectral Centroid** tracking to visualize spectral brightness (center of mass of STFT spectrum)
 - Visual analysis of **Chroma**, **Tempogram**, and other psychoacoustic features *(planned)* 
 - Configurable color maps
+- Adjustable brightness gain and enhanced colormap modes to improve visibility of fine details in the spectrogram <span style="color: gray;">[added in v0.4]</span>
 - Optional dB scaling, log or linear frequency axis for classic linear STFT spectrogram
 - Freeze frame mode and interactive mouse hover to inspect frequency and loudness at any point
+
 
 ## Screenshots
 
@@ -76,6 +78,22 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
     <td align="center" valign="top">
       <img src="_pics/gui_color_scheme_floor_value.png" width="100%" alt="Hover Frequency Readout" />
       <sub><strong>Adjustable dB Floor Slider</strong><br/>Controls the minimum dB threshold for color brightness, helping visualize low-level signals. <span style="color: gray;">[added in v0.3]</span></sub>
+    </td>
+  </tr>
+</table>
+
+
+---
+
+<table style="table-layout: fixed; width: 100%;">
+  <tr>
+    <td align="center" valign="top">
+      <img src="_pics/gui_enhanced_resolution.png" width="100%" alt="Hover Frequency Readout" />
+      <sub><strong>Adjustable Brightness Gain</strong><br/>The Norm Factor slider allows manual control over spectrogram brightness, helping to adapt the display to signals with different loudness levels. <span style="color: gray;">[added in v0.4]</span></sub>
+    </td>
+    <td align="center" valign="top">
+      <img src="_pics/gui_enhanced_color.png" width="100%" alt="Hover Frequency Readout" />
+      <sub><strong>Fine Detail with Enhanced Colormap Modes</strong><br/>With non-linear color legend to enhance contrast, making subtle details more visible: <i>Magma+ & Grayscale+</i>. <span style="color: gray;">[added in v0.4]</span></sub>
     </td>
   </tr>
 </table>
@@ -146,6 +164,7 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
 </table>
 
 
+
 ## Roadmap
 
 | Feature | Status | Description | Implementation Details |
@@ -154,6 +173,7 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
 | Mel-Spectrogram | ✅ Done (v0.1) | Nonlinear frequency scaling approximating human pitch perception | 128 bands, Slaney-style: `2595 * log10(1 + f / 700)`|
 | MFCC | ✅ Done (v0.2) | Mel frequency cepstral coefficients, compact representation of timbre based on perceptual log-mel spectrum | DCT-II on log-mel spectrum, 20 coefficients, no liftering, values clipped to [−100, 100] and normalized to [0, 1] for display |
 | Spectral Centroid (STFT-based) | ✅ Done (v0.3) | Tracks the "center of mass" of the spectrum; correlates with brightness and sharpness | Computed from linear STFT magnitude spectrum with smoothing (Exponential Moving Average), overlaid as a curve on the STFT spectrogram |
+| Adjustable brightness gain and enhanced colormap modes | ✅ Done (v0.4) | To improve visibility of fine details in the spectrogram | Brightness remapped using non-linear scaling; norm factor slider controls global dB scaling, color maps applied after brightness normalization |
 | Chroma | ⏳ Planned | Pitch class mapping, projection of spectral energy onto 12 pitch classes (C, C#, D…) | - |
 | Tempogram / Rhythm Map | ⏳ Planned | Visualizes perceived tempo and rhythmic periodicities over time | - |
 | Spectral Flatness / Contrast | ⏳ Planned | Measures of timbral characteristics | - |
