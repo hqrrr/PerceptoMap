@@ -1,97 +1,46 @@
-name: Build and Release PerceptoMap
+name: Build and Release PerceptoMap (Windows)
 
 on:
   push:
     tags:
-      - 'v*'   # e.g. v1.0.0
+      - 'v*'
   workflow_dispatch:
 
+env:
+  BUILD_TYPE: Release
+  BUILD_DIR: build
+  CMAKE_GENERATOR: "Visual Studio 17 2022"
+
 jobs:
-  build:
-    name: Build ${{ matrix.label }}
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - label: macos_x86_64
-            os: macos-13
-            arch: x86_64
-
-          - label: macos_arm64
-            os: macos-latest
-            arch: arm64
-
-          - label: linux_x86_64
-            os: ubuntu-latest
-            arch: x86_64
-
-          - label: windows_x86_64
-            os: windows-latest
-            arch: x86_64
+  build-windows:
+    runs-on: windows-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set build output directory
-        run: echo "BUILD_DIR=${{ github.workspace }}/build" >> $GITHUB_ENV
-        shell: bash
-
-      - name: Install dependencies (Linux only)
-        if: ${{ runner.os == 'Linux' }}
-        run: |
-          sudo apt update
-          sudo apt install -y build-essential cmake ninja-build \
-            libx11-dev libfreetype6-dev libxext-dev libxrandr-dev \
-            libxcursor-dev libxinerama-dev libasound2-dev
-        shell: bash
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@v2
 
       - name: Configure CMake
-        run: |
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            cmake -B "${{ env.BUILD_DIR }}" -S . -DCMAKE_BUILD_TYPE=Release
-          elif [ "${{ runner.os }}" = "macOS" ]; then
-            cmake -B "${{ env.BUILD_DIR }}" -S . -G Ninja \
-              -DCMAKE_BUILD_TYPE=Release \
-              -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF \
-              -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }}
-          else
-            cmake -B "${{ env.BUILD_DIR }}" -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
-          fi
-        shell: bash
+        run: >
+          cmake -B ${{ env.BUILD_DIR }}
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+          -DVST3_GENERATE_MANIFEST=ON
+          -DCMAKE_GENERATOR="${{ env.CMAKE_GENERATOR }}"
 
-      - name: Build
-        run: cmake --build "${{ env.BUILD_DIR }}" --config Release
-        shell: bash
+      - name: Build project
+        run: cmake --build ${{ env.BUILD_DIR }} --config ${{ env.BUILD_TYPE }}
 
-      - name: Find .vst3 plugin
+      - name: Archive plugin (ZIP)
         run: |
-          PLUGIN=$(find "${{ env.BUILD_DIR }}" -name "*.vst3" -type d | head -n 1)
-          if [ -z "$PLUGIN" ]; then
-            echo "Error: .vst3 plugin not found!"
-            exit 1
-          fi
-          echo "Found plugin: $PLUGIN"
-          echo "PLUGIN_PATH=$PLUGIN" >> $GITHUB_ENV
-        shell: bash
-
-      - name: Zip plugin
-        run: |
-          mkdir -p artifacts
-          ZIPNAME="PerceptoMap_${{ github.ref_name }}_${{ matrix.label }}.zip"
-          cp -r "$PLUGIN_PATH" ./
-          zip -r "artifacts/$ZIPNAME" "$(basename "$PLUGIN_PATH")"
-          echo "ZIPFILE=artifacts/$ZIPNAME" >> $GITHUB_ENV
-        shell: bash
+          powershell Compress-Archive `
+            -Path "${{ env.BUILD_DIR }}\plugin\${{ env.BUILD_TYPE }}\PerceptoMap.vst3" `
+            -DestinationPath "PerceptoMap-vst3-win.zip"
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
-          files: ${{ env.ZIPFILE }}
-          generate_release_notes: true
+          files: PerceptoMap-vst3-win.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
