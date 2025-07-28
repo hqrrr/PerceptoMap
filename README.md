@@ -200,26 +200,31 @@ You can download the latest version of **PerceptoMap** from the [Releases](https
 
 #### Windows
 1. Download the plugin `.zip` file from the [Releases](https://github.com/hqrrr/PerceptoMap/releases)
-2. Unzip the file
-3. Copy `.vst3` **plugin folder** to the default system VST3 directory: `C:\Program Files\Common Files\VST3\`
-    
+2. Unzip and copy `.vst3` **plugin folder** to the default system VST3 directory: `C:\Program Files\Common Files\VST3\`
+
 > Note: If you use a custom VST3 plugin path, copy it there instead.
 
-4. Launch your DAW and run a plugin rescan if necessary
-5. Then, you should be able to find the plugin under `hqrrr - PerceptoMap`
+3. Launch your DAW and run a plugin rescan if necessary
+4. Then, you should be able to find the plugin under `hqrrr - PerceptoMap`
 
-#### macOS
+#### macOS (Intel / Apple Silicon)
 
-Not yet prebuilt — If you're a developer or familiar with JUCE/Xcode, please build from source, see instructions for developers below.
+1. Download the plugin `.zip` file from the [Releases](https://github.com/hqrrr/PerceptoMap/releases):
+   - `macOS_x64` for Intel
+   - `macOS_arm` for Apple Silicon
+2. Unzip and copy the `.vst3` **plugin folder** to the default system VST3 directory:  
+   `/Library/Audio/Plug-ins/VST3`
 
-#### Linux (v0.3, built by @FranklyFlawless)
+> Note: If you use a custom VST3 plugin path, copy it there instead.
+
+3. Launch your DAW and rescan plugins if needed
+4. Then, you should be able to find the plugin under `hqrrr - PerceptoMap`
+
+#### Linux
 1. Download the plugin `.zip` file from the [Releases](https://github.com/hqrrr/PerceptoMap/releases)
-2. Unzip the file
-3. Copy `.vst3` **plugin folder** to your VST3 directory
-
-Special thanks to @FranklyFlawless from the KVR Audio forum for building and testing v0.3 on Debian 12 Bookworm (DAW: Ardour 8.12.0).
-
-> After installation, restart your DAW and run a plugin rescan if needed.
+2. Unzip and copy `.vst3` **plugin folder** to your VST3 directory
+3. Launch your DAW and rescan plugins if needed
+4. Then, you should be able to find the plugin under `hqrrr - PerceptoMap`
 
 ## Build Instructions for Developers
 
