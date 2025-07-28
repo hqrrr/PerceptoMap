@@ -34,9 +34,12 @@ jobs:
 
       - name: Archive plugin (ZIP)
         run: |
-          powershell Compress-Archive `
-            -Path "${{ env.BUILD_DIR }}\plugin\${{ env.BUILD_TYPE }}\PerceptoMap.vst3" `
-            -DestinationPath "PerceptoMap-vst3-win.zip"
+             $pluginPath = "${{ env.BUILD_DIR }}\PerceptoMap_artefacts\${{ env.BUILD_TYPE }}\VST3\PerceptoMap.vst3"
+             if (!(Test-Path $pluginPath)) {
+               Write-Error "Plugin not found at expected path: $pluginPath"
+               exit 1
+             }
+             Compress-Archive -Path $pluginPath -DestinationPath "PerceptoMap-vst3-win.zip"
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
