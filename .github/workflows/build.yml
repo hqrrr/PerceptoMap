@@ -41,7 +41,7 @@ jobs:
         shell: bash
 
       - name: Install dependencies (Linux only)
-        if: runner.os == 'Linux'
+        if: ${{ runner.os == 'Linux' }}
         run: |
           sudo apt update
           sudo apt install -y build-essential cmake ninja-build \
@@ -50,11 +50,16 @@ jobs:
 
       - name: Configure CMake
         run: |
-          cmake_args=""
-          if [ "${{ runner.os }}" = "macOS" ]; then
-            cmake_args="-DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }}"
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cmake -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release
+          elif [ "${{ runner.os }}" = "macOS" ]; then
+            cmake -B "$BUILD_DIR" -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF \
+              -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }}
+          else
+            cmake -B "$BUILD_DIR" -G Ninja -DCMAKE_BUILD_TYPE=Release
           fi
-          cmake -B "$BUILD_DIR" -G Ninja -DCMAKE_BUILD_TYPE=Release $cmake_args
         shell: bash
 
       - name: Build
