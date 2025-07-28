@@ -164,6 +164,16 @@ target_link_libraries("${PROJECT_NAME}"
 
 # IDEs:  Place source groups for project targets into a "Targets" folder (to reduce visual clutter).
 # Xcode: Generate build schemes for project targets.
+#set_target_properties(${project_targets} PROPERTIES
+#    FOLDER "Targets"
+#    XCODE_GENERATE_SCHEME ON)
+set(PLUGIN_OUTPUT_DIR "${CMAKE_BINARY_DIR}/plugin")
+
+set_target_properties(${PROJECT_NAME}_VST3 PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${PLUGIN_OUTPUT_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY "${PLUGIN_OUTPUT_DIR}"
+    ARCHIVE_OUTPUT_DIRECTORY "${PLUGIN_OUTPUT_DIR}")
+
 set_target_properties(${project_targets} PROPERTIES
     FOLDER "Targets"
     XCODE_GENERATE_SCHEME ON)

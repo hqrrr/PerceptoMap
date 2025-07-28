@@ -1,0 +1,91 @@
+name: Build and Release PerceptoMap
+
+on:
+  push:
+    tags:
+      - 'v*'   # e.g. v1.0.0
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macos_x86_64
+            os: macos-13
+            arch: x86_64
+
+          - label: macos_arm64
+            os: macos-latest
+            arch: arm64
+
+          - label: linux_x86_64
+            os: ubuntu-latest
+            arch: x86_64
+
+          - label: windows_x86_64
+            os: windows-latest
+            arch: x86_64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set build output directory
+        id: vars
+        run: echo "BUILD_DIR=${{ github.workspace }}/build" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Install dependencies (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential cmake ninja-build \
+            libx11-dev libfreetype6-dev libxext-dev libxrandr-dev \
+            libxcursor-dev libxinerama-dev libasound2-dev
+
+      - name: Configure CMake
+        run: |
+          cmake_args=""
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            cmake_args="-DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }}"
+          fi
+          cmake -B "$BUILD_DIR" -G Ninja -DCMAKE_BUILD_TYPE=Release $cmake_args
+        shell: bash
+
+      - name: Build
+        run: cmake --build "$BUILD_DIR" --config Release
+
+      - name: Find .vst3 plugin
+        shell: bash
+        run: |
+          PLUGIN=$(find "$BUILD_DIR" -name "*.vst3" -type d | head -n 1)
+          if [ -z "$PLUGIN" ]; then
+            echo "Error: .vst3 plugin not found!"
+            exit 1
+          fi
+          echo "Found plugin: $PLUGIN"
+          echo "PLUGIN_PATH=$PLUGIN" >> $GITHUB_ENV
+
+      - name: Zip plugin
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          ZIPNAME="PerceptoMap_${{ github.ref_name }}_${{ matrix.label }}.zip"
+          cp -r "$PLUGIN_PATH" ./
+          zip -r "artifacts/$ZIPNAME" "$(basename "$PLUGIN_PATH")"
+          echo "ZIPFILE=artifacts/$ZIPNAME" >> $GITHUB_ENV
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          files: ${{ env.ZIPFILE }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
