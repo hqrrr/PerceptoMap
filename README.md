@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/hqrrr/PerceptoMap?label=Release&color=4c8eda)](https://github.com/hqrrr/PerceptoMap/releases)
 &nbsp;
 [![Platforms](https://img.shields.io/badge/Platforms-Windows%20|%20macOS%20|%20Linux-4c8eda)](https://github.com/hqrrr/PerceptoMap/releases)&nbsp;
-[![License](https://img.shields.io/github/license/hqrrr/PerceptoMap?color=888)](https://github.com/hqrrr/PerceptoMap?tab=AGPL-3.0-1-ov-file)&nbsp;
+[![License](https://img.shields.io/github/license/hqrrr/PerceptoMap?color=888)](https://github.com/hqrrr/PerceptoMap/blob/main/LICENSE)&nbsp;
 
 ### Visualizing how we hear — from spectrograms to perception
 
