@@ -1,9 +1,10 @@
 # PerceptoMap
 
-![Downloads](https://img.shields.io/github/downloads/hqrrr/PerceptoMap/total?label=Downloads)&nbsp;
-![Release](https://img.shields.io/github/v/release/hqrrr/PerceptoMap?label=Release&color=4c8eda)&nbsp;
-![Platforms](https://img.shields.io/badge/Platforms-Windows%20|%20macOS%20|%20Linux-4c8eda)&nbsp;
-![License](https://img.shields.io/github/license/hqrrr/PerceptoMap?color=888)&nbsp;
+[![Downloads](https://img.shields.io/github/downloads/hqrrr/PerceptoMap/total?label=Downloads)](https://github.com/hqrrr/PerceptoMap/releases)&nbsp;
+[![Release](https://img.shields.io/github/v/release/hqrrr/PerceptoMap?label=Release&color=4c8eda)](https://github.com/hqrrr/PerceptoMap/releases)
+&nbsp;
+[![Platforms](https://img.shields.io/badge/Platforms-Windows%20|%20macOS%20|%20Linux-4c8eda)](https://github.com/hqrrr/PerceptoMap/releases)&nbsp;
+[![License](https://img.shields.io/github/license/hqrrr/PerceptoMap?color=888)](https://github.com/hqrrr/PerceptoMap?tab=AGPL-3.0-1-ov-file)&nbsp;
 
 ### Visualizing how we hear — from spectrograms to perception
 
