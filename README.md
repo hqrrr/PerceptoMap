@@ -1,6 +1,11 @@
 # PerceptoMap
 
-**Visualizing how we hear — from spectrograms to perception**
+![Downloads](https://img.shields.io/github/downloads/hqrrr/PerceptoMap/total?label=Downloads)&nbsp;
+![Release](https://img.shields.io/github/v/release/hqrrr/PerceptoMap?label=Release&color=4c8eda)&nbsp;
+![Platforms](https://img.shields.io/badge/Platforms-Windows%20|%20macOS%20|%20Linux-4c8eda)&nbsp;
+![License](https://img.shields.io/github/license/hqrrr/PerceptoMap?color=888)&nbsp;
+
+### Visualizing how we hear — from spectrograms to perception
 
 PerceptoMap is an open-source audio plugin (VST3) that visualizes psychoacoustic features of audio signals in real time. Built with [JUCE](https://juce.com/), it's designed to help you **see** how we **perceive** sound — not just how it looks on a frequency plot.
 
@@ -8,6 +13,19 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
 
 > 🎧 If you're the kind of creator who trusts your ears above all — you might not need this.  
 > But if you're curious about how your audio *measures up* to what humans actually hear… welcome aboard.
+
+## Quick Navigation
+
+- [Key Features](#key-features)
+- [Screenshots](#screenshots)
+- [Roadmap](#roadmap)
+- [Why develop this plugin?](#why-develop-this-plugin)
+- [How to install?](#how-to-install)
+  - [Windows](#windows)
+  - [macOS (Intel / Apple Silicon)](#macos-intel--apple-silicon)
+  - [Linux](#linux)
+- [Build Instructions for Developers](#build-instructions-for-developers)
+- [License & Cost](#license--cost)
 
 ## Key Features
 
@@ -163,7 +181,7 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
   </tr>
 </table>
 
-
+[Back to top ↥](#perceptomap)
 
 ## Roadmap
 
@@ -178,6 +196,7 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
 | Tempogram / Rhythm Map | ⏳ Planned | Visualizes perceived tempo and rhythmic periodicities over time | - |
 | Spectral Flatness / Contrast | ⏳ Planned | Measures of timbral characteristics | - |
 
+[Back to top ↥](#perceptomap)
 
 ## Why develop this plugin?
 
@@ -187,6 +206,7 @@ As a frequent user of tools like [librosa](https://librosa.org/) in Python, whil
 
 So I decided to build one — a lightweight, JUCE-based plugin that brings these powerful analysis tools directly into the DAW environment, where musicians, sound designers, and researchers can explore them interactively.
 
+[Back to top ↥](#perceptomap)
 
 ## How to install?
 
@@ -225,6 +245,8 @@ You can download the latest version of **PerceptoMap** from the [Releases](https
 2. Unzip and copy `.vst3` **plugin folder** to your VST3 directory
 3. Launch your DAW and rescan plugins if needed
 4. Then, you should be able to find the plugin under `hqrrr - PerceptoMap`
+
+[Back to top ↥](#perceptomap)
 
 ## Build Instructions for Developers
 
@@ -273,6 +295,8 @@ PerceptoMap/
 └── LICENSE              -> AGPLv3 license file (required for JUCE open-source usage)
 ```
 
+[Back to top ↥](#perceptomap)
+
 ## License & Cost
 
 **PerceptoMap** is proudly open-source and completely free to use, modify, and redistribute under the terms of the [GNU AGPLv3 License](LICENSE).
@@ -291,3 +315,5 @@ Ways you can contribute:
 ---
 
 **Feel free to leave a comment** — bug reports, feature ideas, or just thoughts are always welcome.  
+
+[Back to top ↥](#perceptomap)
