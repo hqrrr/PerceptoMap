@@ -294,7 +294,13 @@ void SpectrogramComponent::drawNextLineOfSpectrogram()
         case ColourScheme::Grayscale:
             centroidColor = juce::Colour::fromRGB(0, 200, 255);   // blue
             break;
+        case ColourScheme::GrayscaleEnhanced:
+            centroidColor = juce::Colour::fromRGB(0, 200, 255);   // blue
+            break;
         case ColourScheme::Magma:
+            centroidColor = juce::Colour::fromRGB(0, 255, 128);   // light green
+            break;
+        case ColourScheme::MagmaEnhanced:
             centroidColor = juce::Colour::fromRGB(0, 255, 128);   // light green
             break;
 
