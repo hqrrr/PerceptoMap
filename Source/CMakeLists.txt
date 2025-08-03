@@ -10,7 +10,8 @@ target_sources("${PROJECT_NAME}"
         PluginProcessor.h
         PluginProcessor.cpp
         SpectrogramComponent.h
-        SpectrogramComponent.cpp)
+        SpectrogramComponent.cpp
+)
 
 # Add subdirectories with source files, if present
 # add_subdirectory(<name>)
