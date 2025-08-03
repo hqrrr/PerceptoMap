@@ -120,13 +120,16 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
         repaint();
     };
 
+    // double click to reset
+    floorDbSlider.setDoubleClickReturnValue(true, -100.0);
+
     // Add and configure norm factor slider (scale/brightness gain of dB values)
     addAndMakeVisible(normFactorSlider);
     normFactorSlider.setTooltip(
         "Set brightness scale factor (norm factor) for spectrogram display.\n"
         "Useful for adjusting overall dB level display."
     );
-    normFactorSlider.setRange(0.001, 2.0, 0.001); // allow finer range
+    normFactorSlider.setRange(0.001, 5.0, 0.001); // allow finer range
     normFactorSlider.setSkewFactorFromMidPoint(1.0); // nonlinear feel
     normFactorSlider.setValue(1.0);  // default
     normFactorSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 80, 20);
@@ -138,6 +141,9 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
         updateLegendImage();
         repaint();
     };
+
+    // double click to reset
+    normFactorSlider.setDoubleClickReturnValue(true, 1.0);
 
 }
 
