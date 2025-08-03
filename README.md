@@ -10,7 +10,7 @@
 
 PerceptoMap is an open-source audio plugin (VST3) that visualizes psychoacoustic features of audio signals in real time. Built with [JUCE](https://juce.com/), it's designed to help you **see** how we **perceive** sound — not just how it looks on a frequency plot.
 
-Unlike typical spectrum or spectrogram analyzers, it supports perceptual visualizations such as **Mel spectrograms** and **Mel-frequency cepstral coefficients (MFCCs)**, and soon also **Chroma**, **Tempogram** etc., offering insight into how humans perceive sound.
+Unlike typical spectrum or spectrogram analyzers, it supports perceptual visualizations such as **Mel spectrograms**, **Mel-frequency cepstral coefficients (MFCCs)**, **Chromagram**, and soon also **Tempogram** etc., offering insight into how humans perceive sound.
 
 > 🎧 If you're the kind of creator who trusts your ears above all — you might not need this.  
 > But if you're curious about how your audio *measures up* to what humans actually hear… welcome aboard.
@@ -33,7 +33,8 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
 - Real-time **Mel Spectrogram** display with perceptual frequency scaling
 - Real-time **Mel-frequency cepstral coefficients (MFCCs)** representing timbral texture and spectral envelope
 - Real-time **Spectral Centroid** tracking to visualize spectral brightness (center of mass of STFT spectrum)
-- Visual analysis of **Chroma**, **Tempogram**, and other psychoacoustic features *(planned)* 
+- Real-time **Chromagram** showing the energy distribution across the 12 pitch classes (C to B), regardless of octave. <span style="color: gray;">[added in v0.5]</span>
+- Visual analysis of **Tempogram** and other psychoacoustic features *(planned)* 
 - Configurable color maps
 - Adjustable brightness gain and enhanced colormap modes to improve visibility of fine details in the spectrogram <span style="color: gray;">[added in v0.4]</span>
 - Optional dB scaling, log or linear frequency axis for classic linear STFT spectrogram
@@ -177,7 +178,14 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
       </sub>
     </td>
     <td align="center" valign="top">
-      <img src="_pics/blank_800x630.png" width="100%" alt="blank" />
+      <img src="_pics/gui_chroma.png" width="100%" alt="blank" />
+      <br/>
+      <sub>
+        <strong>Chromagram:</strong>
+        <i>
+          Projects spectral energy onto the 12 pitch classes (C, C#, D, …), regardless of octave. Useful for analyzing harmony, key, and chord structures. <span style="color: gray;">[added in v0.5]</span>
+        </i>
+      </sub>
     </td>
   </tr>
 </table>
@@ -193,7 +201,7 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
 | MFCC | ✅ Done (v0.2) | Mel frequency cepstral coefficients, compact representation of timbre based on perceptual log-mel spectrum | DCT-II on log-mel spectrum, 20 coefficients, no liftering, values clipped to [−100, 100] and normalized to [0, 1] for display |
 | Spectral Centroid (STFT-based) | ✅ Done (v0.3) | Tracks the "center of mass" of the spectrum; correlates with brightness and sharpness | Computed from linear STFT magnitude spectrum with smoothing (Exponential Moving Average), overlaid as a curve on the STFT spectrogram |
 | Adjustable brightness gain and enhanced colormap modes | ✅ Done (v0.4) | To improve visibility of fine details in the spectrogram | Brightness remapped using non-linear scaling; norm factor slider controls global dB scaling, color maps applied after brightness normalization |
-| Chroma | ⏳ Planned | Pitch class mapping, projection of spectral energy onto 12 pitch classes (C, C#, D…) | - |
+| Chroma | ✅ Done (v0.5) | Pitch class mapping, projection of spectral energy onto 12 pitch classes (C, C#, D…) | Triangular chroma filter bank built from STFT bins, 12 overlapping filters per octave; energy mapped to pitch classes regardless of octave; supports smooth pitch transitions and partial overlaps |
 | Tempogram / Rhythm Map | ⏳ Planned | Visualizes perceived tempo and rhythmic periodicities over time | - |
 | Spectral Flatness / Contrast | ⏳ Planned | Measures of timbral characteristics | - |
 
