@@ -96,11 +96,11 @@ private:
     void timerCallback() override;
     void drawNextLineOfSpectrogram();
 
-    void SpectrogramComponent::drawLinearSpectrogram(int x, std::vector<float>& dBColumn, const int imageHeight, const float maxFreq);
-    void SpectrogramComponent::drawMelSpectrogram(int x, std::vector<float>& dBColumn, const int imageHeight);
-    void SpectrogramComponent::drawMFCC(int x, std::vector<float>& dBColumn, const int imageHeight);
-    void SpectrogramComponent::drawLinearWithCentroid(int x, std::vector<float>& dBColumn, const int imageHeight, const float maxFreq);
-    void SpectrogramComponent::drawChroma(int x, std::vector<float>& dBColumn, const int imageHeight);
+    void drawLinearSpectrogram(int x, std::vector<float>& dBColumn, const int imageHeight, const float maxFreq);
+    void drawMelSpectrogram(int x, std::vector<float>& dBColumn, const int imageHeight);
+    void drawMFCC(int x, std::vector<float>& dBColumn, const int imageHeight);
+    void drawLinearWithCentroid(int x, std::vector<float>& dBColumn, const int imageHeight, const float maxFreq);
+    void drawChroma(int x, std::vector<float>& dBColumn, const int imageHeight);
 
     SpectrogramMode currentMode = SpectrogramMode::Linear;
 
