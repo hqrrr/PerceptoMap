@@ -59,6 +59,8 @@ void SpectrogramComponent::pushNextFFTBlock(const float* data, size_t numSamples
 void SpectrogramComponent::setSampleRate(double newSampleRate)
 {
     sampleRate = newSampleRate;
+    // init filter bank for chromagram
+    buildChromaFilterBank(fftSize, sampleRate);
 }
 
 void SpectrogramComponent::setUseLogFrequency(bool shouldUseLog)
@@ -94,180 +96,205 @@ void SpectrogramComponent::mouseExit(const juce::MouseEvent&)
     repaint();
 }
 
-void SpectrogramComponent::drawNextLineOfSpectrogram()
+void SpectrogramComponent::drawLinearSpectrogram(int x, std::vector<float>& dBColumn, const int imageHeight, const float maxFreq)
 {
-    const int imageWidth = spectrogramImage.getWidth();
-    const int imageHeight = spectrogramImage.getHeight();
-    std::vector<float> dBColumn(imageHeight);
-
-    // Scroll the image left by one pixel
-    spectrogramImage.moveImageSection(0, 0, 1, 0, imageWidth - 1, imageHeight);
-    const int x = imageWidth - 1; // rightmost column
-
-    const float maxFreq = sampleRate / 2.0f;
-
-    if (currentMode == SpectrogramMode::Mel)
+    // default: linear STFT spectrogram
+    for (int y = 0; y < imageHeight; ++y)
     {
-        // melspectrogram
-        std::vector<float> melEnergies(melBands, 0.0f);
+        int binIndex = 0;
 
-        const float minHz = 0.0f;
-        const float maxHz = static_cast<float>(sampleRate) / 2.0f;
-
-        // Slaney-style Mel: mel = 2595 * log10(1 + f / 700)
-        auto hzToMel = [](float hz) {
-            return 2595.0f * std::log10(1.0f + hz / 700.0f);
-            };
-
-        auto melToHz = [](float mel) {
-            return 700.0f * (std::pow(10.0f, mel / 2595.0f) - 1.0f);
-            };
-
-        float melMin = hzToMel(minHz);
-        float melMax = hzToMel(maxHz);
-
-        // 128 Mel bands
-        std::vector<float> melCenterFreqs(melBands);
-        melBandFrequencies.resize(melBands);
-        for (int m = 0; m < melBands; ++m)
+        if (useLogFrequency)
         {
-            float mel = melMin + (melMax - melMin) * m / (melBands - 1);
-            float freq = melToHz(mel);
-            melBandFrequencies[m] = freq;
-            int bin = static_cast<int>((freq / maxHz) * (fftSize / 2));
-            bin = std::clamp(bin, 0, fftSize / 2 - 1);
-            // Simplified approximation: instead of applying a weighted mel filter,
-            // directly sample the FFT magnitude at the center frequency of each mel band.
-            // fast but less accurate than full mel filterbank convolution (as in librosa) but acceptable for visualization
-            melEnergies[m] = fftData[bin];
-        }
+            float logMinFreq = std::log10(30.0f); // lower bound (must match label start)
+            float logMaxFreq = std::log10(maxFreq);
+            float frac = 1.0f - static_cast<float>(y) / imageHeight; // low -> high
 
-        const int imageHeight = spectrogramImage.getHeight();
-
-        for (int y = 0; y < imageHeight; ++y)
-        {
-            int melIndex = juce::jmap(y, 0, imageHeight - 1, melBands - 1, 0);
-            melIndex = std::clamp(melIndex, 0, melBands - 1);
-
-            float scaled = melEnergies[melIndex] * normFactor;
-            float dB = 20.0f * std::log10(scaled + 1e-6f);
-            float clippedDB = juce::jlimit(floorDb, 0.0f, dB);
-            dBColumn[y] = clippedDB;
-            float brightness = juce::jmap(clippedDB, floorDb, 0.0f, 0.0f, 1.0f);
-
-            juce::Colour colour = getColourForValue(brightness);
-            spectrogramImage.setPixelAt(x, y, colour);
-        }
-    }
-    else if (currentMode == SpectrogramMode::MFCC)
-    {
-        // Mel-frequency cepstral coefficient (MFCC)
-        std::vector<float> melEnergies(melBands, 0.0f);
-        const float maxHz = static_cast<float>(sampleRate) / 2.0f;
-        // Slaney-style mel scale
-        auto hzToMel = [](float hz) { return 2595.0f * std::log10(1.0f + hz / 700.0f); };
-        auto melToHz = [](float mel) { return 700.0f * (std::pow(10.0f, mel / 2595.0f) - 1.0f); };
-
-        float melMin = hzToMel(0.0f), melMax = hzToMel(maxHz);
-
-        // Calculate the center frequency of the mel filter and take the fft bin
-        for (int m = 0; m < melBands; ++m)
-        {
-            float mel = melMin + (melMax - melMin) * m / (melBands - 1);
-            float freq = melToHz(mel);
-            int bin = static_cast<int>((freq / maxHz) * (fftSize / 2));
-            bin = std::clamp(bin, 0, fftSize / 2 - 1);
-            // Simplified approximation: instead of applying a weighted mel filter,
-            // directly sample the FFT magnitude at the center frequency of each mel band.
-            // fast but less accurate than full mel filterbank convolution (as in librosa) but acceptable for visualization
-            melEnergies[m] = fftData[bin];
-        }
-
-        // Perform log on mel energies.
-        for (auto& e : melEnergies)
-        {
-            e = std::log(e + 1e-6f);
-        }
-
-        // Simple DCT implementation (Type-II)
-        std::vector<float> mfcc(numCoeffs, 0.0f);
-        for (int k = 0; k < numCoeffs; ++k)
-        {
-            float sum = 0.0f;
-            for (int n = 0; n < melBands; ++n)
-                sum += melEnergies[n] * std::cos(juce::MathConstants<float>::pi * k * (n + 0.5f) / melBands);
-            mfcc[k] = sum;
-        }
-
-        // Map MFCC to image columns.
-        for (int y = 0; y < imageHeight; ++y)
-        {
-            //int coeffIndex = juce::jmap(y, 0, imageHeight - 1, numCoeffs - 1, 0);
-            float frac = static_cast<float>(y) / (imageHeight - 1);
-            int coeffIndex = static_cast<int>((1.0f - frac) * (numCoeffs - 1));
-            coeffIndex = std::clamp(coeffIndex, 0, numCoeffs - 1);
-
-            float value = mfcc[coeffIndex];
-            // limit value in range [mfccMin, mfccMax]
-            float norm = juce::jlimit(mfccMin, mfccMax, value);
-            // 0 - 1 normalization
-            float brightness = juce::jmap(norm, mfccMin, mfccMax, 0.0f, 1.0f) * normFactor;
-
-            juce::Colour colour = getColourForValue(brightness);
-            spectrogramImage.setPixelAt(x, y, colour);
-            dBColumn[y] = value;
-        }
-    }
-    else if (currentMode == SpectrogramMode::LinearWithCentroid)
-    {
-        // Spectral Centroid
-        float rawCentroidHz = computeSpectralCentroid(fftData, fftSize / 2);
-
-        if (!hasPreviousCentroid || rawCentroidHz <= 0.0f || rawCentroidHz > maxFreq)
-        {
-            centroidSmoothed = rawCentroidHz;
-            hasPreviousCentroid = true;
+            float logFreq = logMinFreq + frac * (logMaxFreq - logMinFreq);
+            float freq = std::pow(10.0f, logFreq);
+            binIndex = static_cast<int>((freq / maxFreq) * (fftSize / 2));
         }
         else
         {
-            // Exponential Moving Average
-            centroidSmoothed += smoothingFactor * (rawCentroidHz - centroidSmoothed);
+            float frac = 1.0f - static_cast<float>(y) / imageHeight;
+            binIndex = static_cast<int>(frac * (fftSize / 2));
         }
 
-        for (int y = 0; y < imageHeight; ++y)
+        binIndex = std::clamp(binIndex, 0, fftSize / 2 - 1);
+
+        // convert magnitude to dB
+        float magnitude = fftData[binIndex] * normFactor;
+        float dB = 20.0f * std::log10(magnitude + 1e-6f); // avoid log(0)
+        float clippedDB = juce::jlimit(floorDb, 0.0f, dB);
+        dBColumn[y] = clippedDB;
+        float brightness = juce::jmap(clippedDB, floorDb, 0.0f, 0.0f, 1.0f);
+
+        juce::Colour colour = getColourForValue(brightness);
+        spectrogramImage.setPixelAt(x, y, colour);
+    }
+}
+
+void SpectrogramComponent::drawMelSpectrogram(int x, std::vector<float>& dBColumn, const int imageHeight)
+{
+    // melspectrogram
+    std::vector<float> melEnergies(melBands, 0.0f);
+
+    const float minHz = 0.0f;
+    const float maxHz = static_cast<float>(sampleRate) / 2.0f;
+
+    // Slaney-style Mel: mel = 2595 * log10(1 + f / 700)
+    auto hzToMel = [](float hz) {
+        return 2595.0f * std::log10(1.0f + hz / 700.0f);
+        };
+
+    auto melToHz = [](float mel) {
+        return 700.0f * (std::pow(10.0f, mel / 2595.0f) - 1.0f);
+        };
+
+    float melMin = hzToMel(minHz);
+    float melMax = hzToMel(maxHz);
+
+    // 128 Mel bands
+    std::vector<float> melCenterFreqs(melBands);
+    melBandFrequencies.resize(melBands);
+    for (int m = 0; m < melBands; ++m)
+    {
+        float mel = melMin + (melMax - melMin) * m / (melBands - 1);
+        float freq = melToHz(mel);
+        melBandFrequencies[m] = freq;
+        int bin = static_cast<int>((freq / maxHz) * (fftSize / 2));
+        bin = std::clamp(bin, 0, fftSize / 2 - 1);
+        // Simplified approximation: instead of applying a weighted mel filter,
+        // directly sample the FFT magnitude at the center frequency of each mel band.
+        // fast but less accurate than full mel filterbank convolution (as in librosa) but acceptable for visualization
+        melEnergies[m] = fftData[bin];
+    }
+
+    for (int y = 0; y < imageHeight; ++y)
+    {
+        int melIndex = juce::jmap(y, 0, imageHeight - 1, melBands - 1, 0);
+        melIndex = std::clamp(melIndex, 0, melBands - 1);
+
+        float scaled = melEnergies[melIndex] * normFactor;
+        float dB = 20.0f * std::log10(scaled + 1e-6f);
+        float clippedDB = juce::jlimit(floorDb, 0.0f, dB);
+        dBColumn[y] = clippedDB;
+        float brightness = juce::jmap(clippedDB, floorDb, 0.0f, 0.0f, 1.0f);
+
+        juce::Colour colour = getColourForValue(brightness);
+        spectrogramImage.setPixelAt(x, y, colour);
+    }
+}
+
+void SpectrogramComponent::drawMFCC(int x, std::vector<float>& dBColumn, const int imageHeight)
+{
+    // Mel-frequency cepstral coefficient (MFCC)
+    std::vector<float> melEnergies(melBands, 0.0f);
+    const float maxHz = static_cast<float>(sampleRate) / 2.0f;
+    // Slaney-style mel scale
+    auto hzToMel = [](float hz) { return 2595.0f * std::log10(1.0f + hz / 700.0f); };
+    auto melToHz = [](float mel) { return 700.0f * (std::pow(10.0f, mel / 2595.0f) - 1.0f); };
+
+    float melMin = hzToMel(0.0f), melMax = hzToMel(maxHz);
+
+    // Calculate the center frequency of the mel filter and take the fft bin
+    for (int m = 0; m < melBands; ++m)
+    {
+        float mel = melMin + (melMax - melMin) * m / (melBands - 1);
+        float freq = melToHz(mel);
+        int bin = static_cast<int>((freq / maxHz) * (fftSize / 2));
+        bin = std::clamp(bin, 0, fftSize / 2 - 1);
+        // Simplified approximation: instead of applying a weighted mel filter,
+        // directly sample the FFT magnitude at the center frequency of each mel band.
+        // fast but less accurate than full mel filterbank convolution (as in librosa) but acceptable for visualization
+        melEnergies[m] = fftData[bin];
+    }
+
+    // Perform log on mel energies.
+    for (auto& e : melEnergies)
+    {
+        e = std::log(e + 1e-6f);
+    }
+
+    // Simple DCT implementation (Type-II)
+    std::vector<float> mfcc(numCoeffs, 0.0f);
+    for (int k = 0; k < numCoeffs; ++k)
+    {
+        float sum = 0.0f;
+        for (int n = 0; n < melBands; ++n)
+            sum += melEnergies[n] * std::cos(juce::MathConstants<float>::pi * k * (n + 0.5f) / melBands);
+        mfcc[k] = sum;
+    }
+
+    // Map MFCC to image columns.
+    for (int y = 0; y < imageHeight; ++y)
+    {
+        //int coeffIndex = juce::jmap(y, 0, imageHeight - 1, numCoeffs - 1, 0);
+        float frac = static_cast<float>(y) / (imageHeight - 1);
+        int coeffIndex = static_cast<int>((1.0f - frac) * (numCoeffs - 1));
+        coeffIndex = std::clamp(coeffIndex, 0, numCoeffs - 1);
+
+        float value = mfcc[coeffIndex];
+        // limit value in range [mfccMin, mfccMax]
+        float norm = juce::jlimit(mfccMin, mfccMax, value);
+        // 0 - 1 normalization
+        float brightness = juce::jmap(norm, mfccMin, mfccMax, 0.0f, 1.0f) * normFactor;
+
+        juce::Colour colour = getColourForValue(brightness);
+        spectrogramImage.setPixelAt(x, y, colour);
+        dBColumn[y] = value;
+    }
+}
+
+void SpectrogramComponent::drawLinearWithCentroid(int x, std::vector<float>& dBColumn, const int imageHeight, const float maxFreq)
+{
+    // Spectral Centroid
+    float rawCentroidHz = computeSpectralCentroid(fftData, fftSize / 2);
+
+    if (!hasPreviousCentroid || rawCentroidHz <= 0.0f || rawCentroidHz > maxFreq)
+    {
+        centroidSmoothed = rawCentroidHz;
+        hasPreviousCentroid = true;
+    }
+    else
+    {
+        // Exponential Moving Average
+        centroidSmoothed += smoothingFactor * (rawCentroidHz - centroidSmoothed);
+    }
+
+    for (int y = 0; y < imageHeight; ++y)
+    {
+        int binIndex = 0;
+
+        if (useLogFrequency)
         {
-            int binIndex = 0;
+            float logMinFreq = std::log10(30.0f);
+            float logMaxFreq = std::log10(maxFreq);
+            float frac = 1.0f - static_cast<float>(y) / imageHeight;
 
-            if (useLogFrequency)
-            {
-                float logMinFreq = std::log10(30.0f);
-                float logMaxFreq = std::log10(maxFreq);
-                float frac = 1.0f - static_cast<float>(y) / imageHeight;
-
-                float logFreq = logMinFreq + frac * (logMaxFreq - logMinFreq);
-                float freq = std::pow(10.0f, logFreq);
-                binIndex = static_cast<int>((freq / maxFreq) * (fftSize / 2));
-            }
-            else
-            {
-                float frac = 1.0f - static_cast<float>(y) / imageHeight;
-                binIndex = static_cast<int>(frac * (fftSize / 2));
-            }
-
-            binIndex = std::clamp(binIndex, 0, fftSize / 2 - 1);
-
-            float magnitude = fftData[binIndex] * normFactor;
-            float dB = 20.0f * std::log10(magnitude + 1e-6f);
-            float clippedDB = juce::jlimit(floorDb, 0.0f, dB);
-            dBColumn[y] = clippedDB;
-            float brightness = juce::jmap(clippedDB, floorDb, 0.0f, 0.0f, 1.0f);
-
-            juce::Colour colour = getColourForValue(brightness);
-            spectrogramImage.setPixelAt(x, y, colour);
+            float logFreq = logMinFreq + frac * (logMaxFreq - logMinFreq);
+            float freq = std::pow(10.0f, logFreq);
+            binIndex = static_cast<int>((freq / maxFreq) * (fftSize / 2));
+        }
+        else
+        {
+            float frac = 1.0f - static_cast<float>(y) / imageHeight;
+            binIndex = static_cast<int>(frac * (fftSize / 2));
         }
 
-        // Draw spectral centroid
-        auto mapHzToY = [imageHeight = this->getHeight(), this, maxFreq](float freqHz) -> int
+        binIndex = std::clamp(binIndex, 0, fftSize / 2 - 1);
+
+        float magnitude = fftData[binIndex] * normFactor;
+        float dB = 20.0f * std::log10(magnitude + 1e-6f);
+        float clippedDB = juce::jlimit(floorDb, 0.0f, dB);
+        dBColumn[y] = clippedDB;
+        float brightness = juce::jmap(clippedDB, floorDb, 0.0f, 0.0f, 1.0f);
+
+        juce::Colour colour = getColourForValue(brightness);
+        spectrogramImage.setPixelAt(x, y, colour);
+    }
+
+    // Draw spectral centroid
+    auto mapHzToY = [imageHeight = this->getHeight(), this, maxFreq](float freqHz) -> int
         {
             if (useLogFrequency)
             {
@@ -284,127 +311,133 @@ void SpectrogramComponent::drawNextLineOfSpectrogram()
             }
         };
 
-        int centroidY = mapHzToY(centroidSmoothed);
+    int centroidY = mapHzToY(centroidSmoothed);
 
-        // Define highlight colors
-        juce::Colour centroidColor;
+    // Define highlight colors
+    juce::Colour centroidColor;
 
-        switch (colourScheme)
-        {
-        case ColourScheme::Grayscale:
-            centroidColor = juce::Colour::fromRGB(0, 200, 255);   // blue
-            break;
-        case ColourScheme::GrayscaleEnhanced:
-            centroidColor = juce::Colour::fromRGB(0, 200, 255);   // blue
-            break;
-        case ColourScheme::Magma:
-            centroidColor = juce::Colour::fromRGB(0, 255, 128);   // light green
-            break;
-        case ColourScheme::MagmaEnhanced:
-            centroidColor = juce::Colour::fromRGB(0, 255, 128);   // light green
-            break;
-
-        default:
-            centroidColor = juce::Colour::fromRGB(255, 255, 255);   // white
-            break;
-        }
-
-        // Draw centroid as thick line
-        if (lastCentroidY >= 0)
-        {
-            juce::Graphics g(spectrogramImage);
-            g.setColour(centroidColor);
-            g.drawLine((float)(x - 1), (float)lastCentroidY,
-                (float)x, (float)centroidY,
-                2.0f);  // line width
-        }
-        else
-        {
-            // If it is the first centroid and there is no previous value, draw a small vertical line.
-            for (int dy = -1; dy <= 1; ++dy)
-            {
-                int y = juce::jlimit(0, imageHeight - 1, centroidY + dy);
-                spectrogramImage.setPixelAt(x, y, centroidColor);
-            }
-        }
-
-        lastCentroidY = centroidY;
-    }
-    else if (currentMode == SpectrogramMode::Chroma)
+    switch (colourScheme)
     {
-        // Chromagram
-        std::vector<float> chroma(numChroma, 0.0f);
-        const float binFreqResolution = sampleRate / fftSize;
+    case ColourScheme::Grayscale:
+        centroidColor = juce::Colour::fromRGB(0, 200, 255);   // blue
+        break;
+    case ColourScheme::GrayscaleEnhanced:
+        centroidColor = juce::Colour::fromRGB(0, 200, 255);   // blue
+        break;
+    case ColourScheme::Magma:
+        centroidColor = juce::Colour::fromRGB(0, 255, 128);   // light green
+        break;
+    case ColourScheme::MagmaEnhanced:
+        centroidColor = juce::Colour::fromRGB(0, 255, 128);   // light green
+        break;
 
-        for (int bin = 1; bin < fftSize / 2; ++bin)
-        {
-            float freq = bin * binFreqResolution;
-            if (freq < 20.0f || freq > 5000.0f) continue;
+    default:
+        centroidColor = juce::Colour::fromRGB(255, 255, 255);   // white
+        break;
+    }
 
-            float magnitude = fftData[bin] * normFactor;
-            float dB = 20.0f * std::log10(magnitude + 1e-6f);
-
-            int midiNote = static_cast<int>(std::round(69.0 + 12.0 * std::log2(freq / 440.0)));
-            int pitchClass = ((midiNote % 12) + 12) % 12;
-
-            chroma[pitchClass] += std::pow(10.0f, dB / 10.0f);  // accumulate energy
-        }
-
-        // Normalize chroma vector to [0, 1]
-        float sum = std::accumulate(chroma.begin(), chroma.end(), 0.0f);
-        if (sum > 1e-6f)
-            for (auto& val : chroma)
-                val /= sum;
-
-        const float blockHeight = static_cast<float>(imageHeight) / numChroma;
-
-        for (int y = 0; y < imageHeight; ++y)
-        {
-            //int chromaIndex = juce::jmap(y, 0, imageHeight - 1, numChroma - 1, 0);
-            int chromaIndex = static_cast<int>((imageHeight - 1 - y) / blockHeight);
-            chromaIndex = juce::jlimit(0, numChroma - 1, chromaIndex);
-
-            float brightness = juce::jlimit(0.0f, 1.0f, chroma[chromaIndex] * normFactor);
-            juce::Colour colour = getColourForValue(brightness);
-            spectrogramImage.setPixelAt(x, y, colour);
-            dBColumn[y] = brightness;
-        }
+    // Draw centroid as thick line
+    if (lastCentroidY >= 0)
+    {
+        juce::Graphics g(spectrogramImage);
+        g.setColour(centroidColor);
+        g.drawLine((float)(x - 1), (float)lastCentroidY,
+            (float)x, (float)centroidY,
+            2.0f);  // line width
     }
     else
     {
-        // default: linear STFT spectrogram
-        for (int y = 0; y < imageHeight; ++y)
+        // If it is the first centroid and there is no previous value, draw a small vertical line.
+        for (int dy = -1; dy <= 1; ++dy)
         {
-            int binIndex = 0;
-
-            if (useLogFrequency)
-            {
-                float logMinFreq = std::log10(30.0f); // lower bound (must match label start)
-                float logMaxFreq = std::log10(maxFreq);
-                float frac = 1.0f - static_cast<float>(y) / imageHeight; // low -> high
-
-                float logFreq = logMinFreq + frac * (logMaxFreq - logMinFreq);
-                float freq = std::pow(10.0f, logFreq);
-                binIndex = static_cast<int>((freq / maxFreq) * (fftSize / 2));
-            }
-            else
-            {
-                float frac = 1.0f - static_cast<float>(y) / imageHeight;
-                binIndex = static_cast<int>(frac * (fftSize / 2));
-            }
-
-            binIndex = std::clamp(binIndex, 0, fftSize / 2 - 1);
-
-            // convert magnitude to dB
-            float magnitude = fftData[binIndex] * normFactor;
-            float dB = 20.0f * std::log10(magnitude + 1e-6f); // avoid log(0)
-            float clippedDB = juce::jlimit(floorDb, 0.0f, dB);
-            dBColumn[y] = clippedDB;
-            float brightness = juce::jmap(clippedDB, floorDb, 0.0f, 0.0f, 1.0f);
-
-            juce::Colour colour = getColourForValue(brightness);
-            spectrogramImage.setPixelAt(x, y, colour);
+            int y = juce::jlimit(0, imageHeight - 1, centroidY + dy);
+            spectrogramImage.setPixelAt(x, y, centroidColor);
         }
+    }
+
+    lastCentroidY = centroidY;
+}
+
+void SpectrogramComponent::drawChroma(int x, std::vector<float>& dBColumn, const int imageHeight)
+{
+    // Chromagram
+    std::vector<float> chroma(numChroma, 0.0f);
+    const float binFreqResolution = sampleRate / fftSize;
+
+    for (int bin = 1; bin < fftSize / 2; ++bin)
+    {
+        float freq = bin * binFreqResolution;
+        if (freq < 20.0f || freq > 5000.0f) continue;
+
+        float magnitude = fftData[bin];
+        float dB = 20.0f * std::log10(magnitude + 1e-6f);
+
+        // Simplified implementation: Allocate the energy of each FFT bin completely to a 
+        // single pitch class (i.e., the frequency corresponding to the bin -> MIDI note -> pitch class), 
+        // ignoring the actual frequency uncertainty and frequency distribution continuity.
+        //int midiNote = static_cast<int>(std::round(69.0 + 12.0 * std::log2(freq / 440.0)));
+        //int pitchClass = ((midiNote % 12) + 12) % 12;
+        //chroma[pitchClass] += std::pow(10.0f, dB / 10.0f);  // accumulate energy
+
+        // More accurate implementation: Each FFT bin's linear energy is distributed across all 12 pitch classes
+        // using a chroma filter bank (precomputed based on bin frequencies and pitch class proximity).
+        float linearEnergy = std::pow(10.0f, dB / 10.0f);
+        for (int pc = 0; pc < 12; ++pc)
+        {
+            chroma[pc] += chromaFilterBank[pc][bin] * linearEnergy;
+        }
+    }
+
+    // Normalize chroma vector to [0, 1]
+    float sum = std::accumulate(chroma.begin(), chroma.end(), 0.0f);
+    if (sum > 1e-6f)
+        for (auto& val : chroma)
+            val /= sum;
+
+    const float blockHeight = static_cast<float>(imageHeight) / numChroma;
+
+    for (int y = 0; y < imageHeight; ++y)
+    {
+        //int chromaIndex = juce::jmap(y, 0, imageHeight - 1, numChroma - 1, 0);
+        int chromaIndex = static_cast<int>((imageHeight - 1 - y) / blockHeight);
+        chromaIndex = juce::jlimit(0, numChroma - 1, chromaIndex);
+
+        float brightness = juce::jlimit(0.0f, 1.0f, chroma[chromaIndex] * normFactor);
+        juce::Colour colour = getColourForValue(brightness);
+        spectrogramImage.setPixelAt(x, y, colour);
+        dBColumn[y] = brightness;
+    }
+}
+
+void SpectrogramComponent::drawNextLineOfSpectrogram()
+{
+    const int imageWidth = spectrogramImage.getWidth();
+    const int imageHeight = spectrogramImage.getHeight();
+    std::vector<float> dBColumn(imageHeight);
+
+    // Scroll the image left by one pixel
+    spectrogramImage.moveImageSection(0, 0, 1, 0, imageWidth - 1, imageHeight);
+    const int x = imageWidth - 1; // rightmost column
+
+    const float maxFreq = sampleRate / 2.0f;
+
+    switch (currentMode)
+    {
+    case SpectrogramMode::Mel:
+        SpectrogramComponent::drawMelSpectrogram(x, dBColumn, imageHeight);
+        break;
+    case SpectrogramMode::MFCC:
+        SpectrogramComponent::drawMFCC(x, dBColumn, imageHeight);
+        break;
+    case SpectrogramMode::LinearWithCentroid:
+        SpectrogramComponent::drawLinearWithCentroid(x, dBColumn, imageHeight, maxFreq);
+        break;
+    case SpectrogramMode::Chroma:
+        SpectrogramComponent::drawChroma(x, dBColumn, imageHeight);
+        break;
+    default:
+        SpectrogramComponent::drawLinearSpectrogram(x, dBColumn, imageHeight, maxFreq);
+        break;
     }
 
     if (dBBuffer.size() >= imageWidth)
@@ -654,8 +687,8 @@ void SpectrogramComponent::paint(juce::Graphics& g)
                 chromaIndex = juce::jlimit(0, numChroma - 1, chromaIndex);
                 juce::String pitchName = pitchNames[chromaIndex];
 
-                //float brightness = juce::jlimit(0.0f, 1.0f, dBBuffer[dBIndex][imgY]);
-                float brightness = juce::jlimit(0.0f, 1.0f, dBBuffer[dBIndex][chromaIndex]);
+                float brightness = juce::jlimit(0.0f, 1.0f, dBBuffer[dBIndex][imgY]);
+                //float brightness = juce::jlimit(0.0f, 1.0f, dBBuffer[dBIndex][chromaIndex]);
 
                 labelText = "Pitch Class: " + pitchName + ", " + juce::String(brightness, 2);
             }
@@ -739,6 +772,48 @@ float SpectrogramComponent::computeSpectralCentroid(const float* magnitude, int 
     float centroid = (energySum > 0.0f) ? weightedSum / energySum : 0.0f;
 
     return centroid;
+}
+
+// Chromagram filter bank
+void SpectrogramComponent::buildChromaFilterBank(int fftSize, double sampleRate)
+{
+    const int numBins = fftSize / 2;
+    chromaFilterBank.assign(12, std::vector<float>(numBins, 0.0f));
+
+    const float binFreqResolution = static_cast<float>(sampleRate) / fftSize;
+    const float tuningHz = 440.0f;
+
+    for (int bin = 0; bin < numBins; ++bin)
+    {
+        float freq = bin * binFreqResolution;
+        if (freq < 20.0f || freq > 5000.0f)
+            continue;
+
+        float midiNote = 69.0f + 12.0f * std::log2(freq / tuningHz);
+        float pitchClassFloat = std::fmod(midiNote, 12.0f);
+        if (pitchClassFloat < 0.0f)
+            pitchClassFloat += 12.0f;
+
+        // Distribute to neighboring pitch classes with Gaussian weights
+        for (int pc = 0; pc < 12; ++pc)
+        {
+            float distance = std::min(std::abs(pitchClassFloat - pc), 12.0f - std::abs(pitchClassFloat - pc));
+            float weight = std::exp(-0.5f * std::pow(distance / 1.0f, 2)); // sigma=1.0
+            chromaFilterBank[pc][bin] = weight;
+        }
+    }
+
+    // Normalize each bin's contribution to 1
+    for (int bin = 0; bin < numBins; ++bin)
+    {
+        float sum = 0.0f;
+        for (int pc = 0; pc < 12; ++pc)
+            sum += chromaFilterBank[pc][bin];
+
+        if (sum > 1e-6f)
+            for (int pc = 0; pc < 12; ++pc)
+                chromaFilterBank[pc][bin] /= sum;
+    }
 }
 
 juce::Colour SpectrogramComponent::getColourForValue(float value)

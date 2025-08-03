@@ -96,6 +96,12 @@ private:
     void timerCallback() override;
     void drawNextLineOfSpectrogram();
 
+    void SpectrogramComponent::drawLinearSpectrogram(int x, std::vector<float>& dBColumn, const int imageHeight, const float maxFreq);
+    void SpectrogramComponent::drawMelSpectrogram(int x, std::vector<float>& dBColumn, const int imageHeight);
+    void SpectrogramComponent::drawMFCC(int x, std::vector<float>& dBColumn, const int imageHeight);
+    void SpectrogramComponent::drawLinearWithCentroid(int x, std::vector<float>& dBColumn, const int imageHeight, const float maxFreq);
+    void SpectrogramComponent::drawChroma(int x, std::vector<float>& dBColumn, const int imageHeight);
+
     SpectrogramMode currentMode = SpectrogramMode::Linear;
 
     // mouse tooltip
@@ -133,8 +139,11 @@ private:
     const float smoothingFactor = 0.3f;
 
     // Chromagram
+    void buildChromaFilterBank(int fftSize, double sampleRate);
+    std::vector<std::vector<float>> chromaFilterBank;
     const int numChroma = 12;
     const char* pitchNames[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+
 };
 
 // color schemes
