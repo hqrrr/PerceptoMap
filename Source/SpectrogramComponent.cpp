@@ -186,8 +186,7 @@ void SpectrogramComponent::drawNextLineOfSpectrogram()
         // Perform log on mel energies.
         for (auto& e : melEnergies)
         {
-            float scaled = e * normFactor;
-            e = std::log(scaled + 1e-6f);
+            e = std::log(e + 1e-6f);
         }
 
         // Simple DCT implementation (Type-II)
@@ -212,7 +211,7 @@ void SpectrogramComponent::drawNextLineOfSpectrogram()
             // limit value in range [mfccMin, mfccMax]
             float norm = juce::jlimit(mfccMin, mfccMax, value);
             // 0 - 1 normalization
-            float brightness = juce::jmap(norm, mfccMin, mfccMax, 0.0f, 1.0f);
+            float brightness = juce::jmap(norm, mfccMin, mfccMax, 0.0f, 1.0f) * normFactor;
 
             juce::Colour colour = getColourForValue(brightness);
             spectrogramImage.setPixelAt(x, y, colour);
@@ -221,6 +220,7 @@ void SpectrogramComponent::drawNextLineOfSpectrogram()
     }
     else if (currentMode == SpectrogramMode::LinearWithCentroid)
     {
+        // Spectral Centroid
         float rawCentroidHz = computeSpectralCentroid(fftData, fftSize / 2);
 
         if (!hasPreviousCentroid || rawCentroidHz <= 0.0f || rawCentroidHz > maxFreq)
@@ -330,6 +330,46 @@ void SpectrogramComponent::drawNextLineOfSpectrogram()
 
         lastCentroidY = centroidY;
     }
+    else if (currentMode == SpectrogramMode::Chroma)
+    {
+        // Chromagram
+        std::vector<float> chroma(numChroma, 0.0f);
+        const float binFreqResolution = sampleRate / fftSize;
+
+        for (int bin = 1; bin < fftSize / 2; ++bin)
+        {
+            float freq = bin * binFreqResolution;
+            if (freq < 20.0f || freq > 5000.0f) continue;
+
+            float magnitude = fftData[bin] * normFactor;
+            float dB = 20.0f * std::log10(magnitude + 1e-6f);
+
+            int midiNote = static_cast<int>(std::round(69.0 + 12.0 * std::log2(freq / 440.0)));
+            int pitchClass = ((midiNote % 12) + 12) % 12;
+
+            chroma[pitchClass] += std::pow(10.0f, dB / 10.0f);  // accumulate energy
+        }
+
+        // Normalize chroma vector to [0, 1]
+        float sum = std::accumulate(chroma.begin(), chroma.end(), 0.0f);
+        if (sum > 1e-6f)
+            for (auto& val : chroma)
+                val /= sum;
+
+        const float blockHeight = static_cast<float>(imageHeight) / numChroma;
+
+        for (int y = 0; y < imageHeight; ++y)
+        {
+            //int chromaIndex = juce::jmap(y, 0, imageHeight - 1, numChroma - 1, 0);
+            int chromaIndex = static_cast<int>((imageHeight - 1 - y) / blockHeight);
+            chromaIndex = juce::jlimit(0, numChroma - 1, chromaIndex);
+
+            float brightness = juce::jlimit(0.0f, 1.0f, chroma[chromaIndex] * normFactor);
+            juce::Colour colour = getColourForValue(brightness);
+            spectrogramImage.setPixelAt(x, y, colour);
+            dBColumn[y] = brightness;
+        }
+    }
     else
     {
         // default: linear STFT spectrogram
@@ -434,6 +474,25 @@ void SpectrogramComponent::paint(juce::Graphics& g)
             g.drawText("MFCC " + juce::String(coeffIndex), textBounds, juce::Justification::left);
 
             // Grid line
+            g.setColour(juce::Colours::darkgrey.withAlpha(gridAlpha));
+            g.drawHorizontalLine(y, 55.0f, static_cast<float>(width));
+        }
+    }
+    else if (currentMode == SpectrogramMode::Chroma)
+    {
+        const float blockHeight = static_cast<float>(imageHeight) / numChroma;
+
+        for (int i = 0; i < 12; ++i)
+        {
+            //float normY = static_cast<float>(i) / 11.0f;
+            int y = static_cast<int>((numChroma - 1 - i) * blockHeight);
+
+            juce::Rectangle<int> textBounds(2, y - 8, 60, 16);
+            g.setColour(juce::Colours::black.withAlpha(0.6f));
+            g.fillRect(textBounds);
+            g.setColour(juce::Colours::white);
+            g.drawText(pitchNames[i], textBounds, juce::Justification::left);
+
             g.setColour(juce::Colours::darkgrey.withAlpha(gridAlpha));
             g.drawHorizontalLine(y, 55.0f, static_cast<float>(width));
         }
@@ -576,6 +635,7 @@ void SpectrogramComponent::paint(juce::Graphics& g)
             }
             else if (currentMode == SpectrogramMode::MFCC)
             {
+                // MFCC
                 float frac = static_cast<float>(imgY) / (imageHeight - 1);
                 int coeffIndex = static_cast<int>((1.0f - frac) * (numCoeffs - 1));
                 coeffIndex = juce::jlimit(0, numCoeffs - 1, coeffIndex);
@@ -584,8 +644,20 @@ void SpectrogramComponent::paint(juce::Graphics& g)
                 float norm = juce::jlimit(mfccMin, mfccMax, dB);
                 float brightness = juce::jmap(norm, mfccMin, mfccMax, 0.0f, 1.0f);
 
-                labelText = "MFCC " + juce::String(coeffIndex) +
-                    ", " + juce::String(brightness, 2) + " (normalized)";
+                labelText = "MFCC " + juce::String(coeffIndex) + ", " + juce::String(brightness, 2) + " (normalized)";
+            }
+            else if (currentMode == SpectrogramMode::Chroma)
+            {
+                // Chromagram
+                float blockHeight = static_cast<float>(imageHeight) / numChroma;
+                int chromaIndex = static_cast<int>((imageHeight - 1 - imgY) / blockHeight);
+                chromaIndex = juce::jlimit(0, numChroma - 1, chromaIndex);
+                juce::String pitchName = pitchNames[chromaIndex];
+
+                //float brightness = juce::jlimit(0.0f, 1.0f, dBBuffer[dBIndex][imgY]);
+                float brightness = juce::jlimit(0.0f, 1.0f, dBBuffer[dBIndex][chromaIndex]);
+
+                labelText = "Pitch Class: " + pitchName + ", " + juce::String(brightness, 2);
             }
             else
             {
@@ -686,21 +758,13 @@ juce::Colour SpectrogramComponent::getColourForValue(float value)
         float adjusted = 0.0f;
 
         if (value <= 0.8f)
-        {
             adjusted = 0.25f * value;  // y=[0.0, 0.2]
-        }
         else if (value <= 0.9f)
-        {
             adjusted = 0.2f + 1.0f * (value - 0.8f);  // y=[0.2, 0.3]
-        }
         else if (value <= 0.95f)
-        {
             adjusted = 0.3f + 5.0f * (value - 0.9f);  // y=[0.3, 0.55]
-        }
         else
-        {
             adjusted = 0.55f + 9.0f * (value - 0.95f);  // y=[0.55, 1.0]
-        }
 
         // Clip to [0, 1] to avoid rounding issues
         adjusted = juce::jlimit(0.0f, 1.0f, adjusted);
