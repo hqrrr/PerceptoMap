@@ -33,8 +33,9 @@ public:
         Linear = 1,
         Mel,
         MFCC,
-        LinearWithCentroid
-        // TODO: add Chroma, etc.
+        LinearWithCentroid,
+        Chroma
+        // TODO: add Tempogram, Rhythm, etc.
     };
 
     SpectrogramComponent();
@@ -131,6 +132,9 @@ private:
     // while values of closer to 0 have a greater smoothing effect and are less responsive to recent changes.
     const float smoothingFactor = 0.3f;
 
+    // Chromagram
+    const int numChroma = 12;
+    const char* pitchNames[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
 };
 
 // color schemes

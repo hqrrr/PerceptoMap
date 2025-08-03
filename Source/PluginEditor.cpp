@@ -67,12 +67,14 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
         "- Linear: Standard STFT spectrogram with linear or log frequency axis.\n"
         "- Mel: Mel-scaled spectrogram that spaces frequencies according to nonlinear human pitch perception.\n"
         "- MFCC: Mel-frequency cepstral coefficient, representing timbral texture. Typically used in audio classification and speech recognition.\n"
-        "- Spectral Centroid: STFT spectrogram with added curves showing where the energy is centered and how widely it is spread across frequencies."
+        "- Spectral Centroid: STFT spectrogram with added curves showing where the energy is centered and how widely it is spread across frequencies.\n"
+        "- Chroma: Chromagram showing the energy distribution across the 12 pitch classes (C to B), regardless of octave. Useful for analyzing harmonic content and key."
     );
     spectrogramModeBox.addItem("Linear", static_cast<int>(SpectrogramComponent::SpectrogramMode::Linear));
     spectrogramModeBox.addItem("Mel", static_cast<int>(SpectrogramComponent::SpectrogramMode::Mel));
     spectrogramModeBox.addItem("MFCC", static_cast<int>(SpectrogramComponent::SpectrogramMode::MFCC));
     spectrogramModeBox.addItem("Spectral Centroid", static_cast<int>(SpectrogramComponent::SpectrogramMode::LinearWithCentroid));
+    spectrogramModeBox.addItem("Chroma", static_cast<int>(SpectrogramComponent::SpectrogramMode::Chroma));
 
     spectrogramModeBox.setSelectedId(static_cast<int>(SpectrogramComponent::SpectrogramMode::Linear));  // default: linear
 
@@ -88,7 +90,7 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
     addAndMakeVisible(logScaleBox);
     logScaleBox.setTooltip(
         "Select frequency y axis scale.\n"
-        "Note: Not applicable in Mel-spectrogram & MFCC mode"
+        "Note: Not applicable in Mel-spectrogram / MFCC / Chroma mode"
     );
     logScaleBox.addItem("Linear Y", 1);
     logScaleBox.addItem("Log Y", 2);
@@ -104,7 +106,7 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
     addAndMakeVisible(floorDbSlider);
     floorDbSlider.setTooltip(
         "Set the dB floor (minimum brightness threshold) for spectrogram display.\n"
-        "Note: Not applicable in MFCC mode"
+        "Note: Not applicable in MFCC and Chroma mode"
     );
     floorDbSlider.setRange(-200.0, -1.0, 1.0);  // floor dB from -400 to -20
     floorDbSlider.setValue(-100.0); // default: -100 dB
@@ -164,8 +166,10 @@ void SpectrogramAudioProcessorEditor::paint(juce::Graphics& g)
     g.setColour(juce::Colours::white);
     g.setFont(12.0f);
 
-    if (spectrogram.getCurrentMode() == SpectrogramComponent::SpectrogramMode::MFCC)
+    if (spectrogram.getCurrentMode() == SpectrogramComponent::SpectrogramMode::MFCC ||
+        spectrogram.getCurrentMode() == SpectrogramComponent::SpectrogramMode::Chroma)
     {
+        // normalized legend label for MFCC and Chromagram [0, 1]
         g.drawText("0.0", legendX - 50, legendY, 45, legendImage.getHeight(), juce::Justification::right);
         g.drawText("1.0", legendX + legendImage.getWidth() + 5, legendY, 40, legendImage.getHeight(), juce::Justification::left);
     }
