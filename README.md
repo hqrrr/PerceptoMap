@@ -34,21 +34,24 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
 - Real-time **Mel-frequency cepstral coefficients (MFCCs)** representing timbral texture and spectral envelope
 - Real-time **Spectral Centroid** tracking to visualize spectral brightness (center of mass of STFT spectrum)
 - Real-time **Chromagram** showing the energy distribution across the 12 pitch classes (C to B), regardless of octave. <span style="color: gray;">[added in v0.5]</span>
+- **Time–Frequency Reassignment** mode for enhanced STFT resolution, based on the paper [[hal-00414583: Time-Frequency reassignment: from principles to algorithms](https://hal.science/hal-00414583/document)]. This mode sharpens the localization of spectral peaks by reassigning energy to more accurate time–frequency coordinates, making harmonic structures and transient details clearer compared to the standard STFT. <span style="color: gray;">[added in v0.6]</span>
 - Visual analysis of **Tempogram** and other psychoacoustic features *(planned)* 
 - Configurable color maps
 - Adjustable brightness gain and enhanced colormap modes to improve visibility of fine details in the spectrogram <span style="color: gray;">[added in v0.4]</span>
 - Optional dB scaling, log or linear frequency axis for classic linear STFT spectrogram
 - Freeze frame mode and interactive mouse hover to inspect frequency and loudness at any point
+- Configurable FFT size for balancing time resolution and frequency resolution.<span style="color: gray;">[added in v0.6]</span>
+- Independent scroll speed control, allowing smooth visualization at different FFT sizes and overlap settings without distorting the spectral data. <span style="color: gray;">[added in v0.6]</span>
 
 
 ## Screenshots
 
-<p align="center">
+<!-- <p align="center">
   <img src="_pics/gui_ableton_live_12.png" width="100%" alt="GUI" />
   <sub>Plugin User Interface in Ableton Live 12</sub>
 </p>
 
----
+--- -->
 
 <table style="table-layout: fixed; width: 100%;">
   <tr>
@@ -114,6 +117,11 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
     <td align="center" valign="top">
       <img src="_pics/gui_enhanced_color.png" width="100%" alt="Hover Frequency Readout" />
       <sub><strong>Fine Detail with Enhanced Colormap Modes</strong><br/>With non-linear color legend to enhance contrast, making subtle details more visible: <i>Magma+ & Grayscale+</i>. <span style="color: gray;">[added in v0.4]</span></sub>
+    </td>
+    <td align="center" valign="top">
+      <img src="_pics/gui_enhanced_STFT_time_frequency_reassignment.png" width="100%" alt="Time–Frequency Reassignment Mode" />
+      <sub><strong>Time–Frequency Reassignment Mode</strong><br/>
+      Sharpens the time–frequency localization of spectral peaks by reassigning energy to more accurate coordinates. Harmonic structures and transients become more clearly defined, compared to standard STFT. <span style="color: gray;">[added in v0.6]</span></sub>
     </td>
   </tr>
 </table>
@@ -202,6 +210,7 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
 | Spectral Centroid (STFT-based) | ✅ Done (v0.3) | Tracks the "center of mass" of the spectrum; correlates with brightness and sharpness | Computed from linear STFT magnitude spectrum with smoothing (Exponential Moving Average), overlaid as a curve on the STFT spectrogram |
 | Adjustable brightness gain and enhanced colormap modes | ✅ Done (v0.4) | To improve visibility of fine details in the spectrogram | Brightness remapped using non-linear scaling; norm factor slider controls global dB scaling, color maps applied after brightness normalization |
 | Chroma | ✅ Done (v0.5) | Pitch class mapping, projection of spectral energy onto 12 pitch classes (C, C#, D…) | Triangular chroma filter bank built from STFT bins, 12 overlapping filters per octave; energy mapped to pitch classes regardless of octave; supports smooth pitch transitions and partial overlaps |
+| Enhanced STFT with Time–Frequency Reassignment (Linear+) | ✅ Done (v0.6) | Sharper time–frequency localization by reassigning each STFT bin’s energy to more accurate time/frequency coordinates | Based on [[hal-00414583: Time-Frequency reassignment: from principles to algorithms](https://hal.science/hal-00414583/document)], implemented with Gaussian-window STFT and its time & frequency derivatives. Instantaneous frequency and group delay estimates are used to re-map spectral energy, improving localization of transients and harmonics compared to standard STFT. Supports same FFT size and log/linear axis options as Linear mode |
 | Tempogram / Rhythm Map | ⏳ Planned | Visualizes perceived tempo and rhythmic periodicities over time | - |
 | Spectral Flatness / Contrast | ⏳ Planned | Measures of timbral characteristics | - |
 
