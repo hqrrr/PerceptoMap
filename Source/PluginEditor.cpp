@@ -30,6 +30,22 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
     // Set sample rate
     spectrogram.setSampleRate(audioProcessor.getSampleRate());
 
+    // Fixed display of fold/expand button (always visible)
+    addAndMakeVisible(toggleUiButton);
+    toggleUiButton.setTooltip("Show/Hide control panels");
+    toggleUiButton.setAlwaysOnTop(true);
+    toggleUiButton.onClick = [this]()
+        {
+            controlsVisible = !controlsVisible;
+            updateControlsVisibility();
+            // switch arrow
+            toggleUiButton.setButtonText(controlsVisible ? HideMenuText : ShowMenuText);
+            resized();
+            repaint();
+        };
+    // init visibility
+    updateControlsVisibility();
+
     // Add and configure freeze button
     addAndMakeVisible(freezeButton);
     freezeButton.setTooltip("Freeze or resume spectrogram scrolling");
@@ -39,6 +55,41 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
         freezeButton.setButtonText(isFrozen ? "Resume" : "Freeze");
         spectrogram.setFrozen(isFrozen);
     };
+
+    // Add and configure FFT size dropdown
+    addAndMakeVisible(fftSizeBox);
+    fftSizeBox.setTooltip("Select FFT window size. Larger = better frequency, worse time resolution.");
+    fftSizeBox.addItem("512", 9);   // 2^9
+    fftSizeBox.addItem("1024", 10);  // 2^10
+    fftSizeBox.addItem("2048", 11);  // 2^11
+    fftSizeBox.addItem("4096", 12);  // 2^12
+    fftSizeBox.addItem("8192", 13);  // 2^13
+
+    fftSizeBox.setSelectedId(11); // default: 2048
+    fftSizeBox.onChange = [this]()
+    {
+        const int newOrder = fftSizeBox.getSelectedId();
+        spectrogram.setFFTOrder(newOrder);
+        updateLegendImage();
+        repaint();
+    };
+
+    // Add and configure scroll speed dropdown
+    addAndMakeVisible(scrollSpeedBox);
+    scrollSpeedBox.setTooltip(
+        "Scroll speed (controls overlap)"
+    );
+    scrollSpeedBox.addItem("x1", 1);  // overlap = 1
+    scrollSpeedBox.addItem("x2", 2);    // overlap = 2
+    scrollSpeedBox.addItem("x4", 4);    // overlap = 4
+    scrollSpeedBox.addItem("x8", 8);    // overlap = 8
+
+    scrollSpeedBox.setSelectedId(2); // default: overlap = 2
+    scrollSpeedBox.onChange = [this]()
+        {
+            const int ov = scrollSpeedBox.getSelectedId();
+            spectrogram.setOverlap(ov);
+        };
 
     // Add and configure colour scheme combo box
     addAndMakeVisible(colourSchemeBox);
@@ -65,12 +116,14 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
     spectrogramModeBox.setTooltip(
         "Select the type of spectrogram to display.\n"
         "- Linear: Standard STFT spectrogram with linear or log frequency axis.\n"
+        "- Linear+: Enhanced STFT spectrogram after time-frequency reassignment with linear or log frequency axis.\n"
         "- Mel: Mel-scaled spectrogram that spaces frequencies according to nonlinear human pitch perception.\n"
         "- MFCC: Mel-frequency cepstral coefficient, representing timbral texture. Typically used in audio classification and speech recognition.\n"
         "- Spectral Centroid: STFT spectrogram with added curves showing where the energy is centered and how widely it is spread across frequencies.\n"
         "- Chroma: Chromagram showing the energy distribution across the 12 pitch classes (C to B), regardless of octave. Useful for analyzing harmonic content and key."
     );
     spectrogramModeBox.addItem("Linear", static_cast<int>(SpectrogramComponent::SpectrogramMode::Linear));
+    spectrogramModeBox.addItem("Linear+", static_cast<int>(SpectrogramComponent::SpectrogramMode::LinearPlus));
     spectrogramModeBox.addItem("Mel", static_cast<int>(SpectrogramComponent::SpectrogramMode::Mel));
     spectrogramModeBox.addItem("MFCC", static_cast<int>(SpectrogramComponent::SpectrogramMode::MFCC));
     spectrogramModeBox.addItem("Spectral Centroid", static_cast<int>(SpectrogramComponent::SpectrogramMode::LinearWithCentroid));
@@ -159,30 +212,34 @@ void SpectrogramAudioProcessorEditor::paint(juce::Graphics& g)
 
     // Legend aligned to topBar (same vertical height), placed at top-right corner
     const int topBarHeight = 30;
-    const int margin = 40;
+    const int baseMargin = 40;
+    const int rightReserve = baseMargin + toggleW + gap;
 
-    const int legendX = getWidth() - legendImage.getWidth() - margin;
-    const int legendY = (topBarHeight - legendImage.getHeight()) / 2;  // vertical center inside topBar
-
-    // Draw legend color bar
-    g.drawImage(legendImage, legendX, legendY, legendImage.getWidth(), legendImage.getHeight(),
-        0, 0, legendImage.getWidth(), legendImage.getHeight());
-
-    // dB labels
-    g.setColour(juce::Colours::white);
-    g.setFont(12.0f);
-
-    if (spectrogram.getCurrentMode() == SpectrogramComponent::SpectrogramMode::MFCC ||
-        spectrogram.getCurrentMode() == SpectrogramComponent::SpectrogramMode::Chroma)
+    if (controlsVisible)
     {
-        // normalized legend label for MFCC and Chromagram [0, 1]
-        g.drawText("0.0", legendX - 50, legendY, 45, legendImage.getHeight(), juce::Justification::right);
-        g.drawText("1.0", legendX + legendImage.getWidth() + 5, legendY, 40, legendImage.getHeight(), juce::Justification::left);
-    }
-    else
-    {
-        g.drawText(juce::String((int)spectrogram.getFloorDb()) + " dB", legendX - 50, legendY, 45, legendImage.getHeight(), juce::Justification::right);
-        g.drawText("0 dB", legendX + legendImage.getWidth() + 5, legendY, 40, legendImage.getHeight(), juce::Justification::left);
+        const int legendX = getWidth() - legendImage.getWidth() - rightReserve;
+        const int legendY = (topBarHeight - legendImage.getHeight()) / 2;  // vertical center inside topBar
+
+        // Draw legend color bar
+        g.drawImage(legendImage, legendX, legendY, legendImage.getWidth(), legendImage.getHeight(),
+            0, 0, legendImage.getWidth(), legendImage.getHeight());
+
+        // dB labels
+        g.setColour(juce::Colours::white);
+        g.setFont(12.0f);
+
+        if (spectrogram.getCurrentMode() == SpectrogramComponent::SpectrogramMode::MFCC ||
+            spectrogram.getCurrentMode() == SpectrogramComponent::SpectrogramMode::Chroma)
+        {
+            // normalized legend label for MFCC and Chromagram [0, 1]
+            g.drawText("0.0", legendX - 50, legendY, 45, legendImage.getHeight(), juce::Justification::right);
+            g.drawText("1.0", legendX + legendImage.getWidth() + 5, legendY, 40, legendImage.getHeight(), juce::Justification::left);
+        }
+        else
+        {
+            g.drawText(juce::String((int)spectrogram.getFloorDb()) + " dB", legendX - 50, legendY, 45, legendImage.getHeight(), juce::Justification::right);
+            g.drawText("0 dB", legendX + legendImage.getWidth() + 5, legendY, 40, legendImage.getHeight(), juce::Justification::left);
+        }
     }
 }
 
@@ -203,25 +260,55 @@ void SpectrogramAudioProcessorEditor::updateLegendImage()
     }
 }
 
+void SpectrogramAudioProcessorEditor::updateControlsVisibility()
+{
+    fftSizeBox.setVisible(controlsVisible);
+    scrollSpeedBox.setVisible(controlsVisible);
+    colourSchemeBox.setVisible(controlsVisible);
+    spectrogramModeBox.setVisible(controlsVisible);
+    logScaleBox.setVisible(controlsVisible);
+    floorDbSlider.setVisible(controlsVisible);
+    normFactorSlider.setVisible(controlsVisible);
+    freezeButton.setVisible(controlsVisible);
+}
+
 void SpectrogramAudioProcessorEditor::resized()
 {
     auto area = getLocalBounds();
-    // top row: freeze button & legend bar
-    auto topRow = area.removeFromTop(30);
-    freezeButton.setBounds(topRow.removeFromLeft(100).reduced(5));
+
+    // fixed small button for menu visibility
+    const int baseMargin = 6;
+    toggleUiButton.setBounds(getWidth() - baseMargin - toggleW, baseMargin / 2, toggleW, toggleW);
+
+    const int rowH = controlsVisible ? kRowHeight : 0;
+
+    // top row: freeze button & FFT settings & legend bar
+    auto topRow = area.removeFromTop(rowH);
+    if (controlsVisible)
+    {
+        // freeze button
+        freezeButton.setBounds(topRow.removeFromLeft(100).reduced(5));
+        // FFT size dropdown
+        fftSizeBox.setBounds(topRow.removeFromLeft(100).reduced(5));
+        // scroll speed (overlap)
+        scrollSpeedBox.setBounds(topRow.removeFromLeft(100).reduced(5));
+    }
 
     // second row: dropdown menu etc.
-    auto secondRow = area.removeFromTop(30);
-    // colour scheme
-    colourSchemeBox.setBounds(secondRow.removeFromLeft(110).reduced(5));
-    // spectrogram mode
-    spectrogramModeBox.setBounds(secondRow.removeFromLeft(110).reduced(5));
-    // y axis type: log or linear (for linear STFT spectrogram)
-    logScaleBox.setBounds(secondRow.removeFromLeft(110).reduced(5));
-    // slider floor value colour scheme
-    floorDbSlider.setBounds(secondRow.removeFromLeft(200).reduced(5));
-    // slider norm factor
-    normFactorSlider.setBounds(secondRow.removeFromLeft(200).reduced(5));
+    auto secondRow = area.removeFromTop(rowH);
+    if (controlsVisible)
+    {
+        // colour scheme
+        colourSchemeBox.setBounds(secondRow.removeFromLeft(100).reduced(5));
+        // spectrogram mode
+        spectrogramModeBox.setBounds(secondRow.removeFromLeft(100).reduced(5));
+        // y axis type: log or linear (for linear STFT spectrogram)
+        logScaleBox.setBounds(secondRow.removeFromLeft(100).reduced(5));
+        // slider floor value colour scheme
+        floorDbSlider.setBounds(secondRow.removeFromLeft(200).reduced(5));
+        // slider norm factor
+        normFactorSlider.setBounds(secondRow.removeFromLeft(200).reduced(5));
+    }
 
     // rest: spectrogram
     spectrogram.setBounds(area);

@@ -32,7 +32,11 @@ public:
     void resized() override;
 
     // Optional accessor if processor needs to push audio data to this
-    SpectrogramComponent& getSpectrogramComponent() { return spectrogram; }
+    SpectrogramComponent& getSpectrogramComponent() {return spectrogram;}
+
+    // display/hide menu button text
+    static constexpr const char* ShowMenuText = "+";
+    static constexpr const char* HideMenuText = "-";
 
 private:
     juce::TooltipWindow tooltipWindow;
@@ -45,9 +49,22 @@ private:
     juce::Image legendImage;
     void updateLegendImage();
 
+    // display/hide menu button
+    juce::TextButton toggleUiButton{HideMenuText};
+    bool controlsVisible = true;
+    static constexpr int kRowHeight = 30;    // Height of each row
+    const int toggleW = 24;
+    const int gap = 8;
+    void updateControlsVisibility();
+
     // freeze button
-    juce::TextButton freezeButton{ "Freeze" };
+    juce::TextButton freezeButton{"Freeze"};
     bool isFrozen = false;
+
+    // dropdown menu for FFT size
+    juce::ComboBox fftSizeBox;
+    // dropdown menu for scroll speed
+    juce::ComboBox scrollSpeedBox;
 
     // dropdown menu for spectrogram color scheme
     juce::ComboBox colourSchemeBox;

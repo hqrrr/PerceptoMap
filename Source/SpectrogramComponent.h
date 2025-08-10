@@ -34,7 +34,8 @@ public:
         Mel,
         MFCC,
         LinearWithCentroid,
-        Chroma
+        Chroma,
+        LinearPlus
         // TODO: add Tempogram, Rhythm, etc.
     };
 
@@ -50,6 +51,11 @@ public:
     void setColourScheme(ColourScheme scheme);
     void setSpectrogramMode(SpectrogramMode mode);
     void setFrozen(bool shouldFreeze);
+
+    // change FFT order at runtime
+    void setFFTOrder(int newOrder);
+    // change FFT overlap at runtime
+    void setOverlap(int newOverlap);
 
     // color map spectrogram
     juce::Colour getColourForValue(float normValue);
@@ -68,21 +74,35 @@ public:
 private:
     juce::Image spectrogramImage;
 
-    static constexpr int fftOrder = 11; // 2^11 = 2048
-    static constexpr int fftSize = 1 << fftOrder;
+    // FFT state
+    int fftOrder = 11;  // default 2^11 = 2048
+    int fftSize = 1 << fftOrder;
 
-    juce::dsp::FFT forwardFFT;
-    juce::dsp::WindowingFunction<float> window;
+    juce::dsp::FFT forwardFFT{fftOrder};
+    std::unique_ptr<juce::dsp::WindowingFunction<float>> window;
 
-    float fifo[fftSize] = { 0.0f };
-    float fftData[fftSize * 2] = { 0.0f };  // doubled for real+imag
+    std::vector<float> fifo;    // size = fftSize
+    std::vector<float> fftData; // size = fftSize * 2
     int fifoIndex = 0;
+
+    // FFT settings
+    int overlap = 4;           // 4x overlap
+    int hopSize = 0;
+    int samplesSinceHop = 0;
+    std::vector<float> ring;   // size = fftSize
+    size_t ringWrite = 0;
 
     bool nextFFTBlockReady = false;
 
     bool useLogFrequency = true;
 
     double sampleRate = 44100.0;
+
+    // scrolling
+    float pixelsPerSecond = 0.0f;
+    float pixelAccum = 0.0f;
+    int   uiFps = 60;
+    std::vector<int> imgColAge;
 
     bool isFrozen = false;
 
@@ -101,6 +121,7 @@ private:
     void drawMFCC(int x, std::vector<float>& dBColumn, const int imageHeight);
     void drawLinearWithCentroid(int x, std::vector<float>& dBColumn, const int imageHeight, const float maxFreq);
     void drawChroma(int x, std::vector<float>& dBColumn, const int imageHeight);
+    void drawReassignedSpectrogram(int x, std::vector<float>& dBColumn, const int imageHeight, const float maxFreq);
 
     SpectrogramMode currentMode = SpectrogramMode::Linear;
 
@@ -144,6 +165,11 @@ private:
     const int numChroma = 12;
     const char* pitchNames[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
 
+    // Time-Frequency reassigned STFT spectrogram
+    // adjust to control density
+    const float thresholdFactor = 0.05f;
+    // Gaussian window width
+    const float sigmaCoef = 0.3f;
 };
 
 // color schemes

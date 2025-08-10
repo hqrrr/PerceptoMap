@@ -2,7 +2,7 @@
 
 cmake_minimum_required(VERSION 3.22)
 
-project(PerceptoMap VERSION 0.5)
+project(PerceptoMap VERSION 0.6)
 
 
 ### Dependency versions ###

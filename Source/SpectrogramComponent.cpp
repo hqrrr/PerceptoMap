@@ -1,4 +1,4 @@
-/*
+﻿/*
   ==============================================================================
 
     SpectrogramComponent.cpp
@@ -13,24 +13,156 @@
 #include "SpectrogramComponent.h"
 
 SpectrogramComponent::SpectrogramComponent()
-    : forwardFFT(fftOrder),
-    window(fftSize, juce::dsp::WindowingFunction<float>::hann)
 {
+    // allocate default FFT state
+    fftSize = 1 << fftOrder;
+    // init FFT
+    forwardFFT = juce::dsp::FFT(fftOrder);
+    // init window
+    window = std::make_unique<juce::dsp::WindowingFunction<float>>(
+        fftSize, juce::dsp::WindowingFunction<float>::hann, true);
+
+    fifo.assign(fftSize, 0.0f);
+    fftData.assign(fftSize * 2, 0.0f);
+    fifoIndex = 0;
+    nextFFTBlockReady = false;
+
+    // init overlap/hop ring buffer
+    hopSize = std::max(1, fftSize / overlap);
+    ring.assign(fftSize, 0.0f);
+    ringWrite = 0;
+    samplesSinceHop = 0;
+
+    // pre-build
+    buildChromaFilterBank(fftSize, sampleRate);
+
     spectrogramImage = juce::Image(juce::Image::RGB, fftSize, fftSize / 2, true);
     // 60 FPS
-    startTimerHz(60); 
+    startTimerHz(60);
+    // scrolling
+    pixelsPerSecond = (hopSize > 0) ? (static_cast<float>(sampleRate) / hopSize) : 0.0f;
+    pixelAccum = 0.0f;
+    imgColAge.assign(spectrogramImage.getWidth(), -1);
     // mouse listener
     addMouseListener(this, true);
 }
 
-void SpectrogramComponent::timerCallback()
+void SpectrogramComponent::setFFTOrder(int newOrder)
 {
-    if (isFrozen || !nextFFTBlockReady)
+    // 512 - 8192
+    newOrder = juce::jlimit(9, 13, newOrder);
+
+    if (newOrder == fftOrder)
         return;
 
-    drawNextLineOfSpectrogram();
+    fftOrder = newOrder;
+    fftSize = 1 << fftOrder;
+
+    forwardFFT = juce::dsp::FFT(fftOrder);
+
+    window = std::make_unique<juce::dsp::WindowingFunction<float>>(
+        fftSize, juce::dsp::WindowingFunction<float>::hann, true);
+
+    fifo.assign(fftSize, 0.0f);
+    fftData.assign(fftSize * 2, 0.0f);
+    fifoIndex = 0;
     nextFFTBlockReady = false;
-    //repaint(getWidth() - 1, 0, 1, getHeight());
+
+    // init FFT settings
+    hopSize = std::max(1, fftSize / overlap);
+    ring.assign(fftSize, 0.0f);
+    ringWrite = 0;
+    samplesSinceHop = 0;
+
+    buildChromaFilterBank(fftSize, sampleRate);
+
+    lastCentroidY = -1;
+    hasPreviousCentroid = false;
+    centroidSmoothed = 0.0f;
+
+    dBBuffer.clear();
+
+    juce::Graphics g(spectrogramImage);
+    g.fillAll(juce::Colours::black);
+
+    // scrolling
+    pixelsPerSecond = (hopSize > 0) ? (static_cast<float>(sampleRate) / hopSize) : 0.0f;
+    imgColAge.assign(spectrogramImage.getWidth(), -1);
+
+    repaint();
+}
+
+void SpectrogramComponent::setOverlap(int newOverlap)
+{
+    // only 1/2/4/8 allowed
+    int allowed[] = {1, 2, 4, 8};
+    int best = 1;
+    for (int v : allowed) if (std::abs(v - newOverlap) < std::abs(best - newOverlap)) best = v;
+
+    if (overlap == best) return;
+    overlap = best;
+
+    // Recalculate hop based on the current fftSize and reset the hop counter
+    hopSize = std::max(1, fftSize / overlap);
+    samplesSinceHop = 0;
+
+    // Ensure that the ring size is correct
+    if ((int)ring.size() != fftSize)
+        ring.assign(fftSize, 0.0f);
+
+    // scrolling
+    pixelsPerSecond = (hopSize > 0) ? (static_cast<float>(sampleRate) / hopSize) : 0.0f;
+    if ((int)imgColAge.size() != spectrogramImage.getWidth())
+        imgColAge.assign(spectrogramImage.getWidth(), -1);
+    else
+        std::fill(imgColAge.begin(), imgColAge.end(), -1);
+}
+
+void SpectrogramComponent::timerCallback()
+{
+    if (isFrozen)
+        return;
+
+    // cumulative pixels that should be rolled in this frame.
+    pixelAccum += (pixelsPerSecond / static_cast<float>(uiFps));
+
+    // number of “whole pixel columns” that need to be advanced in this frame.
+    int steps = static_cast<int>(std::floor(pixelAccum));
+    if (steps <= 0)
+        return; // If less than 1px, wait for the next frame; ensure sub-pixel smoothness.
+
+    pixelAccum -= static_cast<float>(steps);
+
+    // Use a new column when there is a new FFT column
+    // reuse the previous column if there isn't one
+    for (int s = 0; s < steps; ++s)
+    {
+        if (nextFFTBlockReady)
+        {
+            drawNextLineOfSpectrogram();  // use one frame real data and scroll 1px
+            nextFFTBlockReady = false;
+        }
+        else
+        {
+            // no new data: scroll 1px and repeat the previous column
+            const int imageWidth = spectrogramImage.getWidth();
+            const int imageHeight = spectrogramImage.getHeight();
+            if (imageWidth < 2 || imageHeight <= 0)
+                continue;
+            // 1px to left
+            spectrogramImage.moveImageSection(0, 0, 1, 0, imageWidth - 1, imageHeight);
+            // copy last column
+            spectrogramImage.moveImageSection(imageWidth - 1, 0, imageWidth - 2, 0, 1, imageHeight);
+            if ((int)imgColAge.size() != imageWidth)
+                imgColAge.assign(imageWidth, -1);
+
+            if (!imgColAge.empty())
+                std::move(imgColAge.begin() + 1, imgColAge.end(), imgColAge.begin());
+
+            if (imageWidth >= 2)
+                imgColAge[imageWidth - 1] = imgColAge[imageWidth - 2];
+        }
+    }
     repaint();
 }
 
@@ -38,20 +170,29 @@ void SpectrogramComponent::pushNextFFTBlock(const float* data, size_t numSamples
 {
     for (size_t i = 0; i < numSamples; ++i)
     {
-        if (nextFFTBlockReady)
-            return;
+        ring[ringWrite] = data[i];
+        ringWrite = (ringWrite + 1) % fftSize;
+        samplesSinceHop++;
 
-        fifo[fifoIndex++] = data[i];
-
-        if (fifoIndex == fftSize)
+        if (samplesSinceHop >= hopSize && !nextFFTBlockReady)
         {
-            std::copy(std::begin(fifo), std::end(fifo), fftData);
-            window.multiplyWithWindowingTable(fftData, fftSize);
+            // Copy the last fftSize samples
+            const size_t start = (ringWrite + fftSize - fftSize) % fftSize;
+            size_t firstLen = std::min((size_t)fftSize, (size_t)(fftSize - start));
+            std::copy(ring.begin() + start, ring.begin() + start + firstLen, fftData.begin());
+            if (firstLen < (size_t)fftSize)
+                std::copy(ring.begin(), ring.begin() + (fftSize - firstLen), fftData.begin() + firstLen);
 
-            forwardFFT.performFrequencyOnlyForwardTransform(fftData);
+            std::fill(fftData.begin() + fftSize, fftData.end(), 0.0f);
+
+            // no window if linear+ mode
+            if (currentMode != SpectrogramMode::LinearPlus)
+                window->multiplyWithWindowingTable(fftData.data(), fftSize);
+
+            forwardFFT.performFrequencyOnlyForwardTransform(fftData.data());
 
             nextFFTBlockReady = true;
-            fifoIndex = 0;
+            samplesSinceHop = 0;
         }
     }
 }
@@ -61,6 +202,12 @@ void SpectrogramComponent::setSampleRate(double newSampleRate)
     sampleRate = newSampleRate;
     // init filter bank for chromagram
     buildChromaFilterBank(fftSize, sampleRate);
+    // scrolling
+    pixelsPerSecond = (hopSize > 0) ? (static_cast<float>(sampleRate) / hopSize) : 0.0f;
+    if ((int)imgColAge.size() != spectrogramImage.getWidth())
+        imgColAge.assign(spectrogramImage.getWidth(), -1);
+    else
+        std::fill(imgColAge.begin(), imgColAge.end(), -1);
 }
 
 void SpectrogramComponent::setUseLogFrequency(bool shouldUseLog)
@@ -248,7 +395,7 @@ void SpectrogramComponent::drawMFCC(int x, std::vector<float>& dBColumn, const i
 void SpectrogramComponent::drawLinearWithCentroid(int x, std::vector<float>& dBColumn, const int imageHeight, const float maxFreq)
 {
     // Spectral Centroid
-    float rawCentroidHz = computeSpectralCentroid(fftData, fftSize / 2);
+    float rawCentroidHz = computeSpectralCentroid(fftData.data(), fftSize / 2);
 
     if (!hasPreviousCentroid || rawCentroidHz <= 0.0f || rawCentroidHz > maxFreq)
     {
@@ -409,6 +556,116 @@ void SpectrogramComponent::drawChroma(int x, std::vector<float>& dBColumn, const
     }
 }
 
+void SpectrogramComponent::drawReassignedSpectrogram(
+    int x, std::vector<float>& dBColumn, int imageHeight, float maxFreq)
+{
+    // init Gaussian window, time-weighted, and analytic derivative
+    std::vector<float> gauss(fftSize), gauss_t(fftSize), gauss_d(fftSize);
+    const float N = static_cast<float>(fftSize);
+    const float mu = (N - 1) / 2.0f;
+    const float sigma = sigmaCoef * mu;
+
+    for (int n = 0; n < fftSize; ++n)
+    {
+        float t = static_cast<float>(n) - mu;
+        float w = std::exp(-0.5f * (t * t) / (sigma * sigma));
+        gauss[n] = w;
+        gauss_t[n] = t * w;
+        gauss_d[n] = -(t / (sigma * sigma)) * w;
+    }
+
+    std::vector<float> timeBlock(fftSize);
+    const size_t w = ringWrite;
+    size_t firstLen = std::min((size_t)fftSize, ring.size() > 0 ? (ring.size() - w) : (size_t)0);
+    if (firstLen > 0 && ring.size() >= (size_t)fftSize)
+    {
+        std::copy(ring.begin() + w, ring.begin() + w + firstLen, timeBlock.begin());
+        if (firstLen < (size_t)fftSize)
+            std::copy(ring.begin(), ring.begin() + (fftSize - firstLen), timeBlock.begin() + firstLen);
+    }
+    else
+    {
+        std::fill(timeBlock.begin(), timeBlock.end(), 0.0f);
+    }
+
+    // prepare FFT arrays
+    std::vector<float> Xf(fftSize * 2, 0.0f), Xtf(fftSize * 2, 0.0f), Xdf(fftSize * 2, 0.0f);
+    for (int n = 0; n < fftSize; ++n)
+    {
+        float x = timeBlock[n];
+        Xf[n] = x * gauss[n];
+        Xtf[n] = x * gauss_t[n];
+        Xdf[n] = x * gauss_d[n];
+    }
+    juce::dsp::FFT fft(fftOrder);
+    fft.performRealOnlyForwardTransform(Xf.data());
+    fft.performRealOnlyForwardTransform(Xtf.data());
+    fft.performRealOnlyForwardTransform(Xdf.data());
+
+    // clear output column and prepare accumulator
+    for (int y = 0; y < imageHeight; ++y)
+        dBColumn[y] = floorDb;
+    std::vector<float> pixelEnergy(imageHeight, floorDb);
+
+    auto getComplexBin = [&](const std::vector<float>& buf, int k) -> std::complex<float>
+    {
+        if (k == 0)               return { buf[0], 0.0f };
+        else if (k == fftSize / 2)  return { buf[1], 0.0f };
+        else                      return { buf[2 * k], buf[2 * k + 1] };
+    };
+
+    const int nBins = fftSize / 2;
+    // for each positive frequency bin, compute reassigned frequency
+    for (int k = 0; k < nBins; ++k)
+    {
+        std::complex<float> stft = getComplexBin(Xf, k);
+        std::complex<float> stft_d = getComplexBin(Xdf, k);
+
+        float mag2 = std::norm(stft * normFactor);
+        if (mag2 < thresholdFactor) continue; // reject low magnitude
+        if (std::abs(stft) < 1e-12f) continue; // avoid division by zero
+
+        // frequency bin center
+        float omega = 2.0f * juce::MathConstants<float>::pi * k / float(fftSize);
+        float omega_hat = omega + std::imag(stft_d / stft);
+
+        float freq_hat = omega_hat * sampleRate / (2.0f * juce::MathConstants<float>::pi);
+
+        if (!std::isfinite(freq_hat) || freq_hat < 0.0f || freq_hat > maxFreq) continue;
+
+        // map freq to vertical pixel
+        int y = 0;
+        if (useLogFrequency)
+        {
+            float logMinFreq = std::log10(30.0f);
+            float logMaxFreq = std::log10(maxFreq);
+            float logFreqHat = std::log10(std::max(freq_hat, 30.0f));
+            float yNorm = (logFreqHat - logMinFreq) / (logMaxFreq - logMinFreq);
+            y = imageHeight - 1 - static_cast<int>(yNorm * imageHeight);
+        }
+        else
+        {
+            float normY = 1.0f - freq_hat / maxFreq;
+            y = static_cast<int>(normY * imageHeight);
+        }
+        if (y >= 0 && y < imageHeight)
+        {
+            float dB = 10.0f * std::log10(mag2 + 1e-9f);
+            dB = juce::jlimit(floorDb, 0.0f, dB);
+            pixelEnergy[y] = std::max(pixelEnergy[y], dB);
+        }
+    }
+
+    // paint the reassigned column into the spectrogram image and buffer
+    for (int y = 0; y < imageHeight; ++y)
+    {
+        dBColumn[y] = pixelEnergy[y];
+        float brightness = juce::jmap(pixelEnergy[y], floorDb, 0.0f, 0.0f, 1.0f);
+        juce::Colour colour = getColourForValue(brightness);
+        spectrogramImage.setPixelAt(x, y, colour);
+    }
+}
+
 void SpectrogramComponent::drawNextLineOfSpectrogram()
 {
     const int imageWidth = spectrogramImage.getWidth();
@@ -417,6 +674,18 @@ void SpectrogramComponent::drawNextLineOfSpectrogram()
 
     // Scroll the image left by one pixel
     spectrogramImage.moveImageSection(0, 0, 1, 0, imageWidth - 1, imageHeight);
+
+    if ((int)imgColAge.size() != imageWidth)
+        imgColAge.assign(imageWidth, -1);
+
+    if (!imgColAge.empty())
+        std::move(imgColAge.begin() + 1, imgColAge.end(), imgColAge.begin());
+
+    for (int i = 0; i < imageWidth - 1; ++i)
+        if (imgColAge[i] >= 0) ++imgColAge[i];
+
+    imgColAge[imageWidth - 1] = 0;
+
     const int x = imageWidth - 1; // rightmost column
 
     const float maxFreq = sampleRate / 2.0f;
@@ -434,6 +703,9 @@ void SpectrogramComponent::drawNextLineOfSpectrogram()
         break;
     case SpectrogramMode::Chroma:
         SpectrogramComponent::drawChroma(x, dBColumn, imageHeight);
+        break;
+    case SpectrogramMode::LinearPlus:
+        SpectrogramComponent::drawReassignedSpectrogram(x, dBColumn, imageHeight, maxFreq);
         break;
     default:
         SpectrogramComponent::drawLinearSpectrogram(x, dBColumn, imageHeight, maxFreq);
@@ -610,140 +882,151 @@ void SpectrogramComponent::paint(juce::Graphics& g)
         g.drawLine(0, mousePosition.y, (float)getWidth(), mousePosition.y, 1.0f);
         g.drawLine(mousePosition.x, 0, mousePosition.x, (float)getHeight(), 1.0f);
 
-        int x = mousePosition.x;
-        int y = mousePosition.y;
-
-        // convert GUI coords -> spectrogram image coords
-        auto bounds = getLocalBounds();
-
-        const int imgWidth = spectrogramImage.getWidth();
-        const int imgHeight = spectrogramImage.getHeight();
+        // map GUI coords -> spectrogram image coords
+        const auto bounds = getLocalBounds();
+        const int  imgW = spectrogramImage.getWidth();
+        const int  imgH = spectrogramImage.getHeight();
+        if (imgW <= 0 || imgH <= 0)
+            return;
 
         // X
-        int imgX = juce::jlimit(0, imgWidth - 1,
-            imgWidth - 1 -
-            ((mousePosition.x - bounds.getX()) * imgWidth / bounds.getWidth()));
+        const int colX = juce::jlimit(0, imgW - 1,
+            (mousePosition.x - bounds.getX()) * imgW / juce::jmax(1, bounds.getWidth()));
+
 
         // Y
-        int imgY = juce::jlimit(0, imgHeight - 1,
-            (mousePosition.y - bounds.getY()) * imgHeight / bounds.getHeight());
+        const int imgY = juce::jlimit(0, imgH - 1,
+            (mousePosition.y - bounds.getY()) * imgH / juce::jmax(1, bounds.getHeight()));
 
-        int dBIndex = (int)dBBuffer.size() - 1 - imgX;
-        if (imgX >= 0 && imgX < (int)dBBuffer.size() &&
-            imgY >= 0 && imgY < (int)dBBuffer[imgX].size())
+        // how many columns actually exist
+        const int cols = (int)dBBuffer.size();
+        if (cols <= 0)
+            return;
+
+        if ((int)imgColAge.size() != imgW) return;
+        const int age = imgColAge[colX];
+        if (age < 0) return;
+        if (age >= cols) return;
+
+        const int dBIndex = cols - 1 - age;
+        jassert(dBIndex >= 0 && dBIndex < cols);
+
+        const auto& col = dBBuffer[dBIndex];
+        const int colH = (int)col.size();
+        if (imgY < 0 || imgY >= colH)
+            return;
+        // read value
+        float dB = col[imgY];
+        float maxFreq = sampleRate / 2.0f;
+        float freq = 0.0f;
+
+        juce::String labelText;
+
+        if (currentMode == SpectrogramMode::Mel)
         {
-            float dB = dBBuffer[dBIndex][imgY];
-            float maxFreq = sampleRate / 2.0f;
-            float freq = 0.0f;
-
-            juce::String labelText;
-
-            if (currentMode == SpectrogramMode::Mel)
+            // melspectrogram
+            int melIndex = juce::jlimit(0, (int)melBandFrequencies.size() - 1,
+                (int)((float)imgY / getHeight() * melBandFrequencies.size()));
+            freq = melBandFrequencies[melBandFrequencies.size() - 1 - melIndex];
+            // get midi note name
+            juce::String noteName;
+            if (freq >= 20.0f && freq <= 20000.0f)
             {
-                // melspectrogram
-                int melIndex = juce::jlimit(0, (int)melBandFrequencies.size() - 1,
-                    (int)((float)imgY / getHeight() * melBandFrequencies.size()));
-                freq = melBandFrequencies[melBandFrequencies.size() - 1 - melIndex];
-                // get midi note name
-                juce::String noteName;
-                if (freq >= 20.0f && freq <= 20000.0f)
+                int midiNote = (int)std::round(69 + 12 * std::log2(freq / 440.0f));
+                if (midiNote >= 0 && midiNote <= 127)
                 {
-                    int midiNote = (int)std::round(69 + 12 * std::log2(freq / 440.0f));
-                    if (midiNote >= 0 && midiNote <= 127)
-                    {
-                        // octave for middle C: C4
-                        noteName = juce::MidiMessage::getMidiNoteName(midiNote, true, true, 4);
-                    }
-                    else
-                    {
-                        noteName = "(out of range)";
-                    }
+                    // octave for middle C: C4
+                    noteName = juce::MidiMessage::getMidiNoteName(midiNote, true, true, 4);
                 }
                 else
                 {
                     noteName = "(out of range)";
                 }
-                // generate tooltip text
-                labelText = juce::String(freq, 1) + " Hz, " + (noteName.isNotEmpty() ? "note: " + noteName : "") + ", " + juce::String(dB, 1) + " dB";
-            }
-            else if (currentMode == SpectrogramMode::MFCC)
-            {
-                // MFCC
-                float frac = static_cast<float>(imgY) / (imageHeight - 1);
-                int coeffIndex = static_cast<int>((1.0f - frac) * (numCoeffs - 1));
-                coeffIndex = juce::jlimit(0, numCoeffs - 1, coeffIndex);
-
-                // Note: dB is actually MFCC (unitless), not decibel
-                float norm = juce::jlimit(mfccMin, mfccMax, dB);
-                float brightness = juce::jmap(norm, mfccMin, mfccMax, 0.0f, 1.0f);
-
-                labelText = "MFCC " + juce::String(coeffIndex) + ", " + juce::String(brightness, 2) + " (normalized)";
-            }
-            else if (currentMode == SpectrogramMode::Chroma)
-            {
-                // Chromagram
-                float blockHeight = static_cast<float>(imageHeight) / numChroma;
-                int chromaIndex = static_cast<int>((imageHeight - 1 - imgY) / blockHeight);
-                chromaIndex = juce::jlimit(0, numChroma - 1, chromaIndex);
-                juce::String pitchName = pitchNames[chromaIndex];
-
-                float brightness = juce::jlimit(0.0f, 1.0f, dBBuffer[dBIndex][imgY]);
-                //float brightness = juce::jlimit(0.0f, 1.0f, dBBuffer[dBIndex][chromaIndex]);
-
-                labelText = "Pitch Class: " + pitchName + ", " + juce::String(brightness, 2);
             }
             else
             {
-                // STFT spectrogram & with spectral centroid + bandwidth
-                if (useLogFrequency)
+                noteName = "(out of range)";
+            }
+            // generate tooltip text
+            labelText = juce::String(freq, 1) + " Hz, " + (noteName.isNotEmpty() ? "note: " + noteName : "") + ", " + juce::String(dB, 1) + " dB";
+        }
+        else if (currentMode == SpectrogramMode::MFCC)
+        {
+            // MFCC
+            float frac = static_cast<float>(imgY) / (imageHeight - 1);
+            int coeffIndex = static_cast<int>((1.0f - frac) * (numCoeffs - 1));
+            coeffIndex = juce::jlimit(0, numCoeffs - 1, coeffIndex);
+
+            // Note: dB is actually MFCC (unitless), not decibel
+            float norm = juce::jlimit(mfccMin, mfccMax, dB);
+            float brightness = juce::jmap(norm, mfccMin, mfccMax, 0.0f, 1.0f);
+
+            labelText = "MFCC " + juce::String(coeffIndex) + ", " + juce::String(brightness, 2) + " (normalized)";
+        }
+        else if (currentMode == SpectrogramMode::Chroma)
+        {
+            // Chromagram
+            float blockHeight = static_cast<float>(imageHeight) / numChroma;
+            int chromaIndex = static_cast<int>((imageHeight - 1 - imgY) / blockHeight);
+            chromaIndex = juce::jlimit(0, numChroma - 1, chromaIndex);
+            juce::String pitchName = pitchNames[chromaIndex];
+
+            float brightness = juce::jlimit(0.0f, 1.0f, dBBuffer[dBIndex][imgY]);
+            //float brightness = juce::jlimit(0.0f, 1.0f, dBBuffer[dBIndex][chromaIndex]);
+
+            labelText = "Pitch Class: " + pitchName + ", " + juce::String(brightness, 2);
+        }
+        else
+        {
+            // STFT spectrogram & with spectral centroid + bandwidth
+            if (useLogFrequency)
+            {
+                float logMinFreq = std::log10(30.0f);
+                float logMaxFreq = std::log10(maxFreq);
+                float logFreq = logMinFreq + (1.0f - (float)imgY / getHeight()) * (logMaxFreq - logMinFreq);
+                freq = std::pow(10.0f, logFreq);
+            }
+            else
+            {
+                freq = (1.0f - (float)imgY / getHeight()) * maxFreq;
+            }
+            // get midi note name
+            juce::String noteName;
+            if (freq >= 20.0f && freq <= 20000.0f)
+            {
+                int midiNote = (int)std::round(69 + 12 * std::log2(freq / 440.0f));
+                if (midiNote >= 0 && midiNote <= 127)
                 {
-                    float logMinFreq = std::log10(30.0f);
-                    float logMaxFreq = std::log10(maxFreq);
-                    float logFreq = logMinFreq + (1.0f - (float)imgY / getHeight()) * (logMaxFreq - logMinFreq);
-                    freq = std::pow(10.0f, logFreq);
-                }
-                else
-                {
-                    freq = (1.0f - (float)imgY / getHeight()) * maxFreq;
-                }
-                // get midi note name
-                juce::String noteName;
-                if (freq >= 20.0f && freq <= 20000.0f)
-                {
-                    int midiNote = (int)std::round(69 + 12 * std::log2(freq / 440.0f));
-                    if (midiNote >= 0 && midiNote <= 127)
-                    {
-                        // octave for middle C: C4
-                        noteName = juce::MidiMessage::getMidiNoteName(midiNote, true, true, 4);
-                    }
-                    else
-                    {
-                        noteName = "(out of range)";
-                    }
+                    // octave for middle C: C4
+                    noteName = juce::MidiMessage::getMidiNoteName(midiNote, true, true, 4);
                 }
                 else
                 {
                     noteName = "(out of range)";
                 }
-                // generate tooltip text
-                labelText = juce::String(freq, 1) + " Hz, " + (noteName.isNotEmpty() ? "note: " + noteName : "") + ", " + juce::String(dB, 1) + " dB";
             }
-
-            // Draw fixed box under legend bar (top right)
-            const int boxWidth = 240;
-            const int boxHeight = 20;
-            const int padding = 5;
-
-            int boxX = getWidth() - boxWidth - padding;
-            int boxY = padding;  // below legend
-
-            g.setColour(juce::Colours::black.withAlpha(0.6f));
-            g.fillRect(boxX, boxY, boxWidth, boxHeight);
-
-            g.setColour(juce::Colours::white);
-            g.setFont(12.0f);
-            g.drawText(labelText, boxX, boxY, boxWidth, boxHeight, juce::Justification::centredLeft);
+            else
+            {
+                noteName = "(out of range)";
+            }
+            // generate tooltip text
+            labelText = juce::String(freq, 1) + " Hz, " + (noteName.isNotEmpty() ? "note: " + noteName : "") + ", " + juce::String(dB, 1) + " dB";
         }
+
+        // Draw fixed box under legend bar (top right)
+        const int boxWidth = 240;
+        const int boxHeight = 20;
+        const int padding = 5;
+
+        int boxX = getWidth() - boxWidth - padding - 6;
+        int boxY = padding;  // below legend
+
+        g.setColour(juce::Colours::black.withAlpha(0.6f));
+        g.fillRect(boxX, boxY, boxWidth, boxHeight);
+
+        g.setColour(juce::Colours::white);
+        g.setFont(12.0f);
+        g.drawText(labelText, boxX, boxY, boxWidth, boxHeight, juce::Justification::centredLeft);
     }
 
 }
@@ -897,4 +1180,5 @@ juce::Colour SpectrogramComponent::getColourForValue(float value)
 void SpectrogramComponent::resized()
 {
     spectrogramImage = juce::Image(juce::Image::RGB, getWidth(), getHeight(), true);
+    imgColAge.assign(spectrogramImage.getWidth(), -1);
 }
