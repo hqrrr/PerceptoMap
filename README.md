@@ -120,7 +120,7 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
     </td>
     <td align="center" valign="top">
       <img src="_pics/gui_enhanced_STFT_time_frequency_reassignment.png" width="100%" alt="Time–Frequency Reassignment Mode" />
-      <sub><strong>Time–Frequency Reassignment Mode</strong><br/>
+      <sub><strong>Linear+: Time–Frequency Reassignment Mode</strong><br/>
       Sharpens the time–frequency localization of spectral peaks by reassigning energy to more accurate coordinates. Harmonic structures and transients become more clearly defined, compared to standard STFT. <span style="color: gray;">[added in v0.6]</span></sub>
     </td>
   </tr>
