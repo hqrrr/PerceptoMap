@@ -120,7 +120,7 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
     </td>
     <td align="center" valign="top">
       <img src="_pics/gui_enhanced_STFT_time_frequency_reassignment.png" width="100%" alt="Time–Frequency Reassignment Mode" />
-      <sub><strong>Time–Frequency Reassignment Mode</strong><br/>
+      <sub><strong>Linear+: Time–Frequency Reassignment Mode</strong><br/>
       Sharpens the time–frequency localization of spectral peaks by reassigning energy to more accurate coordinates. Harmonic structures and transients become more clearly defined, compared to standard STFT. <span style="color: gray;">[added in v0.6]</span></sub>
     </td>
   </tr>
@@ -204,7 +204,7 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
 
 | Feature | Status | Description | Implementation Details |
 |-|-|-|-|
-| Linear STFT Spectrogram | ✅ Done (v0.1) | Classic time–frequency analysis | FFT size = 2048, Hann window, with log/linear frequency axis display|
+| Linear STFT Spectrogram | ✅ Done (v0.1) | Classic time–frequency analysis | Hann window, with log/linear frequency axis display and adjustable FFT size & scroll speed [added in v0.6]|
 | Mel-Spectrogram | ✅ Done (v0.1) | Nonlinear frequency scaling approximating human pitch perception | 128 bands, Slaney-style: `2595 * log10(1 + f / 700)`|
 | MFCC | ✅ Done (v0.2) | Mel frequency cepstral coefficients, compact representation of timbre based on perceptual log-mel spectrum | DCT-II on log-mel spectrum, 20 coefficients, no liftering, values clipped to [−100, 100] and normalized to [0, 1] for display |
 | Spectral Centroid (STFT-based) | ✅ Done (v0.3) | Tracks the "center of mass" of the spectrum; correlates with brightness and sharpness | Computed from linear STFT magnitude spectrum with smoothing (Exponential Moving Average), overlaid as a curve on the STFT spectrogram |
