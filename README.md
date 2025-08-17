@@ -27,6 +27,7 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
   - [Linux](#linux)
 - [Build Instructions for Developers](#build-instructions-for-developers)
 - [License & Cost](#license--cost)
+- [How to cite](#how-to-cite)
 
 ## Key Features
 
@@ -335,5 +336,26 @@ Ways you can contribute:
 ---
 
 **Feel free to leave a comment** — bug reports, feature ideas, or just thoughts are always welcome.  
+
+[Back to top ↥](#perceptomap)
+
+
+## How to cite
+
+If you use **PerceptoMap** in academic work, please cite a tagged release.
+
+```bibtex
+@software{PerceptoMap_Huang,
+  author  = {Qirui Huang},
+  title   = {PerceptoMap},
+  subtitle= {VST3 spectrogram and psychoacoustic visualizer},
+  version = {v0.7},
+  date    = {2025},
+  url     = {https://github.com/hqrrr/PerceptoMap},
+  note    = {GitHub repository}
+}
+```
+
+> *Replace **version** (incl. release **date**) with the exact version you used.*
 
 [Back to top ↥](#perceptomap)
