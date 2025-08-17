@@ -35,7 +35,8 @@ public:
         MFCC,
         LinearWithCentroid,
         Chroma,
-        LinearPlus
+        LinearPlus,
+        MelPlus
         // TODO: add Tempogram, Rhythm, etc.
     };
 
@@ -52,10 +53,15 @@ public:
     void setSpectrogramMode(SpectrogramMode mode);
     void setFrozen(bool shouldFreeze);
 
+    // set UI refresh rate (frames per second)
+    void setUiFps(int fps);
     // change FFT order at runtime
     void setFFTOrder(int newOrder);
     // change FFT overlap at runtime
     void setOverlap(int newOverlap);
+    // scroll speed
+    void setScrollSpeedMultiplier(int mulX);
+    float getScrollPixelsPerSecond() const { return pixelsPerSecond; }
 
     // color map spectrogram
     juce::Colour getColourForValue(float normValue);
@@ -86,11 +92,12 @@ private:
     int fifoIndex = 0;
 
     // FFT settings
-    int overlap = 4;           // 4x overlap
+    int overlap = 2;           // default: 2x overlap
     int hopSize = 0;
     int samplesSinceHop = 0;
     std::vector<float> ring;   // size = fftSize
     size_t ringWrite = 0;
+    
 
     bool nextFFTBlockReady = false;
 
@@ -103,6 +110,8 @@ private:
     float pixelAccum = 0.0f;
     int   uiFps = 60;
     std::vector<int> imgColAge;
+    float baseScrollPps = 20.0f;  // base speed: 20 px/s
+    int   scrollSpeedMul = 2;   // default: 2x scroll speed
 
     bool isFrozen = false;
 
@@ -122,6 +131,7 @@ private:
     void drawLinearWithCentroid(int x, std::vector<float>& dBColumn, const int imageHeight, const float maxFreq);
     void drawChroma(int x, std::vector<float>& dBColumn, const int imageHeight);
     void drawReassignedSpectrogram(int x, std::vector<float>& dBColumn, const int imageHeight, const float maxFreq);
+    void drawReassignedMelSpectrogram(int x, std::vector<float>& dBColumn, int imageHeight);
 
     SpectrogramMode currentMode = SpectrogramMode::Linear;
 

@@ -37,14 +37,22 @@ SpectrogramComponent::SpectrogramComponent()
     buildChromaFilterBank(fftSize, sampleRate);
 
     spectrogramImage = juce::Image(juce::Image::RGB, fftSize, fftSize / 2, true);
-    // 60 FPS
+    // default FPS: 60 FPS
     startTimerHz(60);
     // scrolling
-    pixelsPerSecond = (hopSize > 0) ? (static_cast<float>(sampleRate) / hopSize) : 0.0f;
+    //pixelsPerSecond = (hopSize > 0) ? (static_cast<float>(sampleRate) / hopSize) : 0.0f;
+    pixelsPerSecond = baseScrollPps * static_cast<float>(scrollSpeedMul);
     pixelAccum = 0.0f;
     imgColAge.assign(spectrogramImage.getWidth(), -1);
     // mouse listener
     addMouseListener(this, true);
+}
+
+void SpectrogramComponent::setUiFps(int fps)
+{
+    // limit FPS between 15 and 240
+    uiFps = juce::jlimit(15, 240, fps);
+    startTimerHz(uiFps);
 }
 
 void SpectrogramComponent::setFFTOrder(int newOrder)
@@ -86,7 +94,7 @@ void SpectrogramComponent::setFFTOrder(int newOrder)
     g.fillAll(juce::Colours::black);
 
     // scrolling
-    pixelsPerSecond = (hopSize > 0) ? (static_cast<float>(sampleRate) / hopSize) : 0.0f;
+    //pixelsPerSecond = (hopSize > 0) ? (static_cast<float>(sampleRate) / hopSize) : 0.0f;
     imgColAge.assign(spectrogramImage.getWidth(), -1);
 
     repaint();
@@ -111,11 +119,26 @@ void SpectrogramComponent::setOverlap(int newOverlap)
         ring.assign(fftSize, 0.0f);
 
     // scrolling
-    pixelsPerSecond = (hopSize > 0) ? (static_cast<float>(sampleRate) / hopSize) : 0.0f;
+    //pixelsPerSecond = (hopSize > 0) ? (static_cast<float>(sampleRate) / hopSize) : 0.0f;
     if ((int)imgColAge.size() != spectrogramImage.getWidth())
         imgColAge.assign(spectrogramImage.getWidth(), -1);
     else
         std::fill(imgColAge.begin(), imgColAge.end(), -1);
+}
+
+void SpectrogramComponent::setScrollSpeedMultiplier(int mulX)
+{
+    // only 1/2/4/8/12/16 allowed
+    int allowed[] = {1, 2, 4, 8, 12, 16};
+    int best = 1;
+    for (int v : allowed)
+        if (std::abs(v - mulX) < std::abs(best - mulX)) best = v;
+
+    if (scrollSpeedMul == best) return;
+    scrollSpeedMul = best;
+
+    pixelsPerSecond = baseScrollPps * static_cast<float>(scrollSpeedMul);
+    pixelAccum = 0.0f;
 }
 
 void SpectrogramComponent::timerCallback()
@@ -203,7 +226,7 @@ void SpectrogramComponent::setSampleRate(double newSampleRate)
     // init filter bank for chromagram
     buildChromaFilterBank(fftSize, sampleRate);
     // scrolling
-    pixelsPerSecond = (hopSize > 0) ? (static_cast<float>(sampleRate) / hopSize) : 0.0f;
+    //pixelsPerSecond = (hopSize > 0) ? (static_cast<float>(sampleRate) / hopSize) : 0.0f;
     if ((int)imgColAge.size() != spectrogramImage.getWidth())
         imgColAge.assign(spectrogramImage.getWidth(), -1);
     else
@@ -599,7 +622,7 @@ void SpectrogramComponent::drawReassignedSpectrogram(
     }
     juce::dsp::FFT fft(fftOrder);
     fft.performRealOnlyForwardTransform(Xf.data());
-    fft.performRealOnlyForwardTransform(Xtf.data());
+    //fft.performRealOnlyForwardTransform(Xtf.data());    // not used yet
     fft.performRealOnlyForwardTransform(Xdf.data());
 
     // clear output column and prepare accumulator
@@ -666,6 +689,122 @@ void SpectrogramComponent::drawReassignedSpectrogram(
     }
 }
 
+void SpectrogramComponent::drawReassignedMelSpectrogram(
+    int x, std::vector<float>& dBColumn, int imageHeight)
+{
+    const float maxHz = static_cast<float>(sampleRate) / 2.0f;
+    auto hzToMel = [](float hz) { return 2595.0f * std::log10(1.0f + hz / 700.0f); };
+    auto melToHz = [](float mel) { return 700.0f * (std::pow(10.0f, mel / 2595.0f) - 1.0f); };
+    const float melMin = hzToMel(0.0f), melMax = hzToMel(maxHz);
+
+    // Accumulate by mag^2, then convert to dB.
+    std::vector<float> melEnergyLin(melBands, 0.0f);
+
+    // Same as Linear+: construct three windows and perform 3 FFTs with Gaussian window.
+    std::vector<float> gauss(fftSize), gauss_t(fftSize), gauss_d(fftSize);
+    const float N = static_cast<float>(fftSize);
+    const float mu = (N - 1.0f) / 2.0f;
+    const float sigma = sigmaCoef * mu;
+
+    for (int n = 0; n < fftSize; ++n)
+    {
+        float t = static_cast<float>(n) - mu;
+        float w = std::exp(-0.5f * (t * t) / (sigma * sigma));
+        gauss[n] = w;
+        gauss_t[n] = t * w;
+        gauss_d[n] = -(t / (sigma * sigma)) * w;
+    }
+
+    std::vector<float> timeBlock(fftSize, 0.0f);
+    const size_t w = ringWrite;
+    size_t firstLen = std::min((size_t)fftSize, ring.size() > 0 ? (ring.size() - w) : (size_t)0);
+    if (firstLen > 0 && ring.size() >= (size_t)fftSize)
+    {
+        std::copy(ring.begin() + w, ring.begin() + w + firstLen, timeBlock.begin());
+        if (firstLen < (size_t)fftSize)
+            std::copy(ring.begin(), ring.begin() + (fftSize - firstLen), timeBlock.begin() + firstLen);
+    }
+    else
+    {
+        std::fill(timeBlock.begin(), timeBlock.end(), 0.0f);
+    }
+
+    // prepare FFT arrays
+    std::vector<float> Xf(fftSize * 2, 0.0f), Xtf(fftSize * 2, 0.0f), Xdf(fftSize * 2, 0.0f);
+    for (int n = 0; n < fftSize; ++n)
+    {
+        float x = timeBlock[n];
+        Xf[n] = x * gauss[n];
+        Xtf[n] = x * gauss_t[n];
+        Xdf[n] = x * gauss_d[n];
+    }
+    juce::dsp::FFT fft(fftOrder);
+    fft.performRealOnlyForwardTransform(Xf.data());
+    //fft.performRealOnlyForwardTransform(Xtf.data());    // not used yet
+    fft.performRealOnlyForwardTransform(Xdf.data());
+
+    // clear output column and prepare accumulator
+    for (int y = 0; y < imageHeight; ++y)
+        dBColumn[y] = floorDb;
+    std::vector<float> pixelEnergy(imageHeight, floorDb);
+
+    auto getComplexBin = [&](const std::vector<float>& buf, int k) -> std::complex<float>
+    {
+        if (k == 0)               return { buf[0], 0.0f };
+        else if (k == fftSize / 2)  return { buf[1], 0.0f };
+        else                      return { buf[2 * k], buf[2 * k + 1] };
+    };
+
+    const int nBins = fftSize / 2;
+    // Frequency reassignment: assign the energy of each bin to the corresponding Mel band
+    for (int k = 0; k < nBins; ++k)
+    {
+        std::complex<float> stft = getComplexBin(Xf, k);
+        std::complex<float> stft_d = getComplexBin(Xdf, k);
+
+        float mag2 = std::norm(stft * normFactor);
+        if (mag2 < thresholdFactor) continue; // reject low magnitude
+        if (std::abs(stft) < 1e-12f) continue; // avoid division by zero
+
+        // frequency bin center
+        float omega = 2.0f * juce::MathConstants<float>::pi * k / float(fftSize);
+        float omega_hat = omega + std::imag(stft_d / stft);
+        float freq_hat = omega_hat * sampleRate / (2.0f * juce::MathConstants<float>::pi);
+
+        if (!std::isfinite(freq_hat) || freq_hat <= 0.0f || freq_hat > maxHz) continue;
+
+        // Frequency -> Mel index
+        //float m = (hzToMel(freq_hat) - melMin) / (melMax - melMin) * (melBands - 1);
+        //int   mi = juce::jlimit(0, melBands - 1, int(std::round(m)));
+
+        //melEnergyLin[mi] += mag2;   // Cumulative energy
+        //melEnergyLin[mi] = juce::jmax(melEnergyLin[mi], mag2);  // Alternative: sharper transients
+        
+        // Frequency -> Mel
+        float mNorm = (hzToMel(freq_hat) - melMin) / (melMax - melMin); // [0,1]
+        int yPix = juce::jlimit(0, imageHeight - 1,
+            (int)std::lround((1.0f - mNorm) * (imageHeight - 1)));
+
+        float dB = 10.0f * std::log10(mag2 + 1e-9f);
+        dB = juce::jlimit(floorDb, 0.0f, dB);
+        pixelEnergy[yPix] = std::max(pixelEnergy[yPix], dB);
+    }
+
+    // Map Mel energy to pixel
+    for (int y = 0; y < imageHeight; ++y)
+    {
+        //int mi = juce::jmap(y, 0, imageHeight - 1, melBands - 1, 0);
+        //mi = std::clamp(mi, 0, melBands - 1);
+        //float dB = 10.0f * std::log10(melEnergyLin[mi] + 1e-9f);
+
+        dBColumn[y] = pixelEnergy[y];
+
+        float brightness = juce::jmap(pixelEnergy[y], floorDb, 0.0f, 0.0f, 1.0f);
+        juce::Colour colour = getColourForValue(brightness);
+        spectrogramImage.setPixelAt(x, y, colour);
+    }
+}
+
 void SpectrogramComponent::drawNextLineOfSpectrogram()
 {
     const int imageWidth = spectrogramImage.getWidth();
@@ -707,6 +846,9 @@ void SpectrogramComponent::drawNextLineOfSpectrogram()
     case SpectrogramMode::LinearPlus:
         SpectrogramComponent::drawReassignedSpectrogram(x, dBColumn, imageHeight, maxFreq);
         break;
+    case SpectrogramMode::MelPlus:
+        drawReassignedMelSpectrogram(x, dBColumn, imageHeight);
+        break;
     default:
         SpectrogramComponent::drawLinearSpectrogram(x, dBColumn, imageHeight, maxFreq);
         break;
@@ -733,7 +875,7 @@ void SpectrogramComponent::paint(juce::Graphics& g)
     const int imageHeight = spectrogramImage.getHeight();
 
     // draw y axis (frequency)
-    if (currentMode == SpectrogramMode::Mel)
+    if (currentMode == SpectrogramMode::Mel || currentMode == SpectrogramMode::MelPlus)
     {
         // Mel scale tick positions (Slaney-style spacing, approximate)
         const int melBands = imageHeight;
@@ -922,7 +1064,7 @@ void SpectrogramComponent::paint(juce::Graphics& g)
 
         juce::String labelText;
 
-        if (currentMode == SpectrogramMode::Mel)
+        if (currentMode == SpectrogramMode::Mel || currentMode == SpectrogramMode::MelPlus)
         {
             // melspectrogram
             int melIndex = juce::jlimit(0, (int)melBandFrequencies.size() - 1,
@@ -978,7 +1120,7 @@ void SpectrogramComponent::paint(juce::Graphics& g)
         }
         else
         {
-            // STFT spectrogram & with spectral centroid + bandwidth
+            // STFT spectrogram
             if (useLogFrequency)
             {
                 float logMinFreq = std::log10(30.0f);
@@ -1028,7 +1170,6 @@ void SpectrogramComponent::paint(juce::Graphics& g)
         g.setFont(12.0f);
         g.drawText(labelText, boxX, boxY, boxWidth, boxHeight, juce::Justification::centredLeft);
     }
-
 }
 
 // Return the center frequency in Hz units.

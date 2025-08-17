@@ -61,10 +61,14 @@ private:
     juce::TextButton freezeButton{"Freeze"};
     bool isFrozen = false;
 
+    // dropdown menu for UI FPS
+    juce::ComboBox fpsBox;
     // dropdown menu for FFT size
     juce::ComboBox fftSizeBox;
     // dropdown menu for scroll speed
     juce::ComboBox scrollSpeedBox;
+    // dropdown menu for overlap
+    juce::ComboBox overlapBox;
 
     // dropdown menu for spectrogram color scheme
     juce::ComboBox colourSchemeBox;

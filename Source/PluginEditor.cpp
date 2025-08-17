@@ -56,6 +56,23 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
         spectrogram.setFrozen(isFrozen);
     };
 
+    // Add and configure FPS dropdown
+    addAndMakeVisible(fpsBox);
+    fpsBox.setTooltip("UI frame rate (render FPS)");
+    fpsBox.addItem("30 FPS", 30);
+    fpsBox.addItem("60 FPS", 60);
+    fpsBox.addItem("90 FPS", 90);
+    fpsBox.addItem("120 FPS", 120);
+    fpsBox.addItem("240 FPS", 240);
+
+    fpsBox.setSelectedId(60);   // default: 60 FPS
+    fpsBox.onChange = [this]()
+    {
+        spectrogram.setUiFps(fpsBox.getSelectedId());
+    };
+
+    spectrogram.setUiFps(fpsBox.getSelectedId());
+
     // Add and configure FFT size dropdown
     addAndMakeVisible(fftSizeBox);
     fftSizeBox.setTooltip("Select FFT window size. Larger = better frequency, worse time resolution.");
@@ -77,19 +94,34 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
     // Add and configure scroll speed dropdown
     addAndMakeVisible(scrollSpeedBox);
     scrollSpeedBox.setTooltip(
-        "Scroll speed (controls overlap)"
+        "Horizontal scroll speed (x axis)"
     );
-    scrollSpeedBox.addItem("x1", 1);  // overlap = 1
-    scrollSpeedBox.addItem("x2", 2);    // overlap = 2
-    scrollSpeedBox.addItem("x4", 4);    // overlap = 4
-    scrollSpeedBox.addItem("x8", 8);    // overlap = 8
+    scrollSpeedBox.addItem("x1", 1);
+    scrollSpeedBox.addItem("x2", 2);
+    scrollSpeedBox.addItem("x4", 4);
+    scrollSpeedBox.addItem("x8", 8);
+    scrollSpeedBox.addItem("x12", 12);
+    scrollSpeedBox.addItem("x16", 16);
 
-    scrollSpeedBox.setSelectedId(2); // default: overlap = 2
+    scrollSpeedBox.setSelectedId(2); // default = 2
     scrollSpeedBox.onChange = [this]()
-        {
-            const int ov = scrollSpeedBox.getSelectedId();
-            spectrogram.setOverlap(ov);
-        };
+    {
+        const int sp = scrollSpeedBox.getSelectedId();
+        spectrogram.setScrollSpeedMultiplier(sp);
+    };
+
+    // Add and configure overlap dropdown
+    addAndMakeVisible(overlapBox);
+    overlapBox.setTooltip("FFT overlap (1/2/4/8), corresponding to overlap ratio 0/50/75/87.5 %. Affects time resolution. The larger the overlap, the more FFTs are performed per second, which means increased CPU overhead.");
+    overlapBox.addItem("0 %", 1);
+    overlapBox.addItem("50 %", 2);
+    overlapBox.addItem("75 %", 4);
+    overlapBox.addItem("87.5 %", 8);
+    overlapBox.setSelectedId(2); // default = 2 (50%)
+    overlapBox.onChange = [this]()
+    {
+        spectrogram.setOverlap(overlapBox.getSelectedId());
+    };
 
     // Add and configure colour scheme combo box
     addAndMakeVisible(colourSchemeBox);
@@ -118,6 +150,7 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
         "- Linear: Standard STFT spectrogram with linear or log frequency axis.\n"
         "- Linear+: Enhanced STFT spectrogram after time-frequency reassignment with linear or log frequency axis.\n"
         "- Mel: Mel-scaled spectrogram that spaces frequencies according to nonlinear human pitch perception.\n"
+        "- Mel+: Mel-scaled spectrogram after time-frequency reassignment.\n"
         "- MFCC: Mel-frequency cepstral coefficient, representing timbral texture. Typically used in audio classification and speech recognition.\n"
         "- Spectral Centroid: STFT spectrogram with added curves showing where the energy is centered and how widely it is spread across frequencies.\n"
         "- Chroma: Chromagram showing the energy distribution across the 12 pitch classes (C to B), regardless of octave. Useful for analyzing harmonic content and key."
@@ -125,6 +158,7 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
     spectrogramModeBox.addItem("Linear", static_cast<int>(SpectrogramComponent::SpectrogramMode::Linear));
     spectrogramModeBox.addItem("Linear+", static_cast<int>(SpectrogramComponent::SpectrogramMode::LinearPlus));
     spectrogramModeBox.addItem("Mel", static_cast<int>(SpectrogramComponent::SpectrogramMode::Mel));
+    spectrogramModeBox.addItem("Mel+", static_cast<int>(SpectrogramComponent::SpectrogramMode::MelPlus));
     spectrogramModeBox.addItem("MFCC", static_cast<int>(SpectrogramComponent::SpectrogramMode::MFCC));
     spectrogramModeBox.addItem("Spectral Centroid", static_cast<int>(SpectrogramComponent::SpectrogramMode::LinearWithCentroid));
     spectrogramModeBox.addItem("Chroma", static_cast<int>(SpectrogramComponent::SpectrogramMode::Chroma));
@@ -262,14 +296,16 @@ void SpectrogramAudioProcessorEditor::updateLegendImage()
 
 void SpectrogramAudioProcessorEditor::updateControlsVisibility()
 {
+    freezeButton.setVisible(controlsVisible);
+    fpsBox.setVisible(controlsVisible);
     fftSizeBox.setVisible(controlsVisible);
     scrollSpeedBox.setVisible(controlsVisible);
+    overlapBox.setVisible(controlsVisible);
     colourSchemeBox.setVisible(controlsVisible);
     spectrogramModeBox.setVisible(controlsVisible);
     logScaleBox.setVisible(controlsVisible);
     floorDbSlider.setVisible(controlsVisible);
     normFactorSlider.setVisible(controlsVisible);
-    freezeButton.setVisible(controlsVisible);
 }
 
 void SpectrogramAudioProcessorEditor::resized()
@@ -288,10 +324,14 @@ void SpectrogramAudioProcessorEditor::resized()
     {
         // freeze button
         freezeButton.setBounds(topRow.removeFromLeft(100).reduced(5));
+        // UI FPS
+        fpsBox.setBounds(topRow.removeFromLeft(100).reduced(5));
         // FFT size dropdown
-        fftSizeBox.setBounds(topRow.removeFromLeft(100).reduced(5));
-        // scroll speed (overlap)
-        scrollSpeedBox.setBounds(topRow.removeFromLeft(100).reduced(5));
+        fftSizeBox.setBounds(topRow.removeFromLeft(80).reduced(5));
+        // overlap
+        overlapBox.setBounds(topRow.removeFromLeft(80).reduced(5));
+        // scroll speed
+        scrollSpeedBox.setBounds(topRow.removeFromLeft(80).reduced(5));
     }
 
     // second row: dropdown menu etc.
