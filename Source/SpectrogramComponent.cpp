@@ -94,7 +94,6 @@ void SpectrogramComponent::setFFTOrder(int newOrder)
     g.fillAll(juce::Colours::black);
 
     // scrolling
-    //pixelsPerSecond = (hopSize > 0) ? (static_cast<float>(sampleRate) / hopSize) : 0.0f;
     imgColAge.assign(spectrogramImage.getWidth(), -1);
 
     repaint();
@@ -119,7 +118,6 @@ void SpectrogramComponent::setOverlap(int newOverlap)
         ring.assign(fftSize, 0.0f);
 
     // scrolling
-    //pixelsPerSecond = (hopSize > 0) ? (static_cast<float>(sampleRate) / hopSize) : 0.0f;
     if ((int)imgColAge.size() != spectrogramImage.getWidth())
         imgColAge.assign(spectrogramImage.getWidth(), -1);
     else
@@ -226,11 +224,13 @@ void SpectrogramComponent::setSampleRate(double newSampleRate)
     // init filter bank for chromagram
     buildChromaFilterBank(fftSize, sampleRate);
     // scrolling
-    //pixelsPerSecond = (hopSize > 0) ? (static_cast<float>(sampleRate) / hopSize) : 0.0f;
     if ((int)imgColAge.size() != spectrogramImage.getWidth())
         imgColAge.assign(spectrogramImage.getWidth(), -1);
     else
         std::fill(imgColAge.begin(), imgColAge.end(), -1);
+    // limit max y frequency
+    const float nyquist = static_cast<float>(sampleRate) * 0.5f;
+    maxFreqHz = juce::jlimit(minFreqHz + 1.0f, nyquist, maxFreqHz);
 }
 
 void SpectrogramComponent::setUseLogFrequency(bool shouldUseLog)
@@ -269,27 +269,40 @@ void SpectrogramComponent::mouseExit(const juce::MouseEvent&)
 void SpectrogramComponent::drawLinearSpectrogram(int x, std::vector<float>& dBColumn, const int imageHeight, const float maxFreq)
 {
     // default: linear STFT spectrogram
+    const float maxHz = static_cast<float>(sampleRate) * 0.5f;
+    const int   nBins = fftSize / 2;
+
     for (int y = 0; y < imageHeight; ++y)
     {
-        int binIndex = 0;
+        //int binIndex = 0;
+        const float fracTopToBottom = static_cast<float>(y) / imageHeight;
+        const float fracBottomToTop = 1.0f - fracTopToBottom;
+        float freqHz = 0.0f;
 
         if (useLogFrequency)
         {
-            float logMinFreq = std::log10(30.0f); // lower bound (must match label start)
-            float logMaxFreq = std::log10(maxFreq);
-            float frac = 1.0f - static_cast<float>(y) / imageHeight; // low -> high
+            //float logMinFreq = std::log10(30.0f); // lower bound (must match label start)
+            //float logMaxFreq = std::log10(maxFreq);
+            //float frac = 1.0f - static_cast<float>(y) / imageHeight; // low -> high
 
-            float logFreq = logMinFreq + frac * (logMaxFreq - logMinFreq);
-            float freq = std::pow(10.0f, logFreq);
-            binIndex = static_cast<int>((freq / maxFreq) * (fftSize / 2));
+            //float logFreq = logMinFreq + frac * (logMaxFreq - logMinFreq);
+            //float freq = std::pow(10.0f, logFreq);
+            //binIndex = static_cast<int>((freq / maxFreq) * (fftSize / 2));
+            const float logMin = std::log10(std::max(1.0f, minFreqHz));
+            const float logMax = std::log10(std::max(minFreqHz + 1.0f, maxFreqHz));
+            const float logVal = logMin + fracBottomToTop * (logMax - logMin);
+            freqHz = std::pow(10.0f, logVal);
         }
         else
         {
-            float frac = 1.0f - static_cast<float>(y) / imageHeight;
-            binIndex = static_cast<int>(frac * (fftSize / 2));
+            //float frac = 1.0f - static_cast<float>(y) / imageHeight;
+            //binIndex = static_cast<int>(frac * (fftSize / 2));
+            freqHz = minFreqHz + fracBottomToTop * (maxFreqHz - minFreqHz);
         }
 
-        binIndex = std::clamp(binIndex, 0, fftSize / 2 - 1);
+        int binIndex = static_cast<int>((freqHz / maxHz) * nBins);
+        //binIndex = std::clamp(binIndex, 0, fftSize / 2 - 1);
+        binIndex = juce::jlimit(0, nBins - 1, binIndex);
 
         // convert magnitude to dB
         float magnitude = fftData[binIndex] * normFactor;
@@ -308,8 +321,7 @@ void SpectrogramComponent::drawMelSpectrogram(int x, std::vector<float>& dBColum
     // melspectrogram
     std::vector<float> melEnergies(melBands, 0.0f);
 
-    const float minHz = 0.0f;
-    const float maxHz = static_cast<float>(sampleRate) / 2.0f;
+    const float maxHz = static_cast<float>(sampleRate) * 0.5f;
 
     // Slaney-style Mel: mel = 2595 * log10(1 + f / 700)
     auto hzToMel = [](float hz) {
@@ -320,8 +332,8 @@ void SpectrogramComponent::drawMelSpectrogram(int x, std::vector<float>& dBColum
         return 700.0f * (std::pow(10.0f, mel / 2595.0f) - 1.0f);
         };
 
-    float melMin = hzToMel(minHz);
-    float melMax = hzToMel(maxHz);
+    const float melMin = hzToMel(std::max(1.0f, minFreqHz));
+    const float melMax = hzToMel(std::max(minFreqHz + 1.0f, maxFreqHz));
 
     // 128 Mel bands
     std::vector<float> melCenterFreqs(melBands);
@@ -431,55 +443,27 @@ void SpectrogramComponent::drawLinearWithCentroid(int x, std::vector<float>& dBC
         centroidSmoothed += smoothingFactor * (rawCentroidHz - centroidSmoothed);
     }
 
-    for (int y = 0; y < imageHeight; ++y)
-    {
-        int binIndex = 0;
-
-        if (useLogFrequency)
-        {
-            float logMinFreq = std::log10(30.0f);
-            float logMaxFreq = std::log10(maxFreq);
-            float frac = 1.0f - static_cast<float>(y) / imageHeight;
-
-            float logFreq = logMinFreq + frac * (logMaxFreq - logMinFreq);
-            float freq = std::pow(10.0f, logFreq);
-            binIndex = static_cast<int>((freq / maxFreq) * (fftSize / 2));
-        }
-        else
-        {
-            float frac = 1.0f - static_cast<float>(y) / imageHeight;
-            binIndex = static_cast<int>(frac * (fftSize / 2));
-        }
-
-        binIndex = std::clamp(binIndex, 0, fftSize / 2 - 1);
-
-        float magnitude = fftData[binIndex] * normFactor;
-        float dB = 20.0f * std::log10(magnitude + 1e-6f);
-        float clippedDB = juce::jlimit(floorDb, 0.0f, dB);
-        dBColumn[y] = clippedDB;
-        float brightness = juce::jmap(clippedDB, floorDb, 0.0f, 0.0f, 1.0f);
-
-        juce::Colour colour = getColourForValue(brightness);
-        spectrogramImage.setPixelAt(x, y, colour);
-    }
+    // Draw STFT
+    SpectrogramComponent::drawLinearSpectrogram(x, dBColumn, imageHeight, maxFreq);
 
     // Draw spectral centroid
     auto mapHzToY = [imageHeight = this->getHeight(), this, maxFreq](float freqHz) -> int
+    {
+        freqHz = juce::jlimit(minFreqHz, maxFreqHz, freqHz);
+        float yNorm = 0.0f;
+        if (useLogFrequency)
         {
-            if (useLogFrequency)
-            {
-                float logMinFreq = std::log10(30.0f);
-                float logMaxFreq = std::log10(maxFreq);
-                float logFreq = std::log10(freqHz);
-                float normY = 1.0f - (logFreq - logMinFreq) / (logMaxFreq - logMinFreq);
-                return juce::jlimit(0, imageHeight - 1, static_cast<int>(normY * imageHeight));
-            }
-            else
-            {
-                float normY = 1.0f - freqHz / maxFreq;
-                return juce::jlimit(0, imageHeight - 1, static_cast<int>(normY * imageHeight));
-            }
-        };
+            const float logMin = std::log10(std::max(1.0f, minFreqHz));
+            const float logMax = std::log10(std::max(minFreqHz + 1.0f, maxFreqHz));
+            const float logF = std::log10(std::max(1.0f, freqHz));
+            yNorm = 1.0f - (logF - logMin) / (logMax - logMin);
+        }
+        else
+        {
+            yNorm = 1.0f - (freqHz - minFreqHz) / (maxFreqHz - minFreqHz);
+        }
+        return juce::jlimit(0, imageHeight - 1, static_cast<int>(yNorm * imageHeight));
+    };
 
     int centroidY = mapHzToY(centroidSmoothed);
 
@@ -654,22 +638,23 @@ void SpectrogramComponent::drawReassignedSpectrogram(
 
         float freq_hat = omega_hat * sampleRate / (2.0f * juce::MathConstants<float>::pi);
 
-        if (!std::isfinite(freq_hat) || freq_hat < 0.0f || freq_hat > maxFreq) continue;
+        if (!std::isfinite(freq_hat) || freq_hat < minFreqHz || freq_hat > maxFreqHz)
+            continue;
 
         // map freq to vertical pixel
         int y = 0;
         if (useLogFrequency)
         {
-            float logMinFreq = std::log10(30.0f);
-            float logMaxFreq = std::log10(maxFreq);
-            float logFreqHat = std::log10(std::max(freq_hat, 30.0f));
-            float yNorm = (logFreqHat - logMinFreq) / (logMaxFreq - logMinFreq);
-            y = imageHeight - 1 - static_cast<int>(yNorm * imageHeight);
+            const float logMin = std::log10(std::max(1.0f, minFreqHz));
+            const float logMax = std::log10(std::max(minFreqHz + 1.0f, maxFreqHz));
+            const float logF = std::log10(std::max(1.0f, freq_hat));
+            const float yNorm = 1.0f - (logF - logMin) / (logMax - logMin);
+            y = juce::jlimit(0, imageHeight - 1, (int)std::lround(yNorm * (imageHeight - 1)));
         }
         else
         {
-            float normY = 1.0f - freq_hat / maxFreq;
-            y = static_cast<int>(normY * imageHeight);
+            const float yNorm = 1.0f - (freq_hat - minFreqHz) / (maxFreqHz - minFreqHz);
+            y = juce::jlimit(0, imageHeight - 1, (int)std::lround(yNorm * (imageHeight - 1)));
         }
         if (y >= 0 && y < imageHeight)
         {
@@ -695,7 +680,8 @@ void SpectrogramComponent::drawReassignedMelSpectrogram(
     const float maxHz = static_cast<float>(sampleRate) / 2.0f;
     auto hzToMel = [](float hz) { return 2595.0f * std::log10(1.0f + hz / 700.0f); };
     auto melToHz = [](float mel) { return 700.0f * (std::pow(10.0f, mel / 2595.0f) - 1.0f); };
-    const float melMin = hzToMel(0.0f), melMax = hzToMel(maxHz);
+    const float melMin = hzToMel(std::max(1.0f, minFreqHz));
+    const float melMax = hzToMel(std::max(minFreqHz + 1.0f, maxFreqHz));
 
     // Accumulate by mag^2, then convert to dB.
     std::vector<float> melEnergyLin(melBands, 0.0f);
@@ -771,7 +757,8 @@ void SpectrogramComponent::drawReassignedMelSpectrogram(
         float omega_hat = omega + std::imag(stft_d / stft);
         float freq_hat = omega_hat * sampleRate / (2.0f * juce::MathConstants<float>::pi);
 
-        if (!std::isfinite(freq_hat) || freq_hat <= 0.0f || freq_hat > maxHz) continue;
+        if (!std::isfinite(freq_hat) || freq_hat < minFreqHz || freq_hat > maxFreqHz)
+            continue;
 
         // Frequency -> Mel index
         //float m = (hzToMel(freq_hat) - melMin) / (melMax - melMin) * (melBands - 1);
@@ -881,13 +868,17 @@ void SpectrogramComponent::paint(juce::Graphics& g)
         const int melBands = imageHeight;
         const int numLabels = 10;
 
+        auto hzToMel = [](float hz) { return 2595.0f * std::log10(1.0f + hz / 700.0f); };
+        auto melToHz = [](float mel) { return 700.0f * (std::pow(10.0f, mel / 2595.0f) - 1.0f); };
+        const float melMin = hzToMel(std::max(1.0f, minFreqHz));
+        const float melMax = hzToMel(std::max(minFreqHz + 1.0f, maxFreqHz));
+
         for (int i = 0; i < numLabels; ++i)
         {
-            float mel = (static_cast<float>(i) / (numLabels - 1)) * 2595.0f * std::log10(1 + maxFreq / 700.0f);
-            float freq = 700.0f * (std::pow(10.0f, mel / 2595.0f) - 1.0f);
-
             float yNorm = static_cast<float>(i) / (numLabels - 1);
-            int y = imageHeight - 1 - static_cast<int>(yNorm * imageHeight);
+            float mel = melMax - yNorm * (melMax - melMin);
+            float freq = melToHz(mel);
+            const int y = juce::jlimit(0, imageHeight - 1, (int)std::lround(yNorm * (imageHeight - 1)));
 
             juce::String label = freq >= 1000.0f ? juce::String(freq / 1000.0f, 1) + " kHz"
                 : juce::String(static_cast<int>(freq)) + " Hz";
@@ -946,63 +937,37 @@ void SpectrogramComponent::paint(juce::Graphics& g)
     }
     else
     {
-        // log y axis or linear, for linear STFT spectrogram & with spectral centroid + bandwidth
-        if (useLogFrequency)
+        // log y axis or linear, for Linear / Linear+ / Linear+Centroid
+        const int numLabels = 10;
+        for (int i = 0; i < numLabels; ++i)
         {
-            std::vector<float> freqsToLabel = { 30, 64, 128, 256, 512, 1024, 2048, 4096,
-                                                8192, 16384, 32768 };
+            const float t = static_cast<float>(i) / (numLabels - 1);
+            float fHz = 0.0f;
+            float y = 0.0f;
 
-            float logMinFreq = std::log10(freqsToLabel.front());
-            float logMaxFreq = std::log10(maxFreq);
-
-            for (float freq : freqsToLabel)
+            if (useLogFrequency)
             {
-                if (freq >= maxFreq)
-                    break;
-
-                float logFreq = std::log10(freq);
-                float yNorm = (logFreq - logMinFreq) / (logMaxFreq - logMinFreq);
-                int y = imageHeight - 1 - static_cast<int>(yNorm * imageHeight);
-
-                // draw label box with dark background
-                juce::Rectangle<int> textBounds(2, y - 12, 60, 16);
-                g.setColour(juce::Colours::black.withAlpha(0.6f));
-                g.fillRect(textBounds);
-                // draw label
-                g.setColour(juce::Colours::white);
-                g.drawText(juce::String(static_cast<int>(freq)) + " Hz",
-                    textBounds, juce::Justification::left);
-                // draw grid line
-                g.setColour(juce::Colours::darkgrey.withAlpha(gridAlpha));
-                g.drawHorizontalLine(y, 55.0f, static_cast<float>(width));
+                const float logMin = std::log10(std::max(1.0f, minFreqHz));
+                const float logMax = std::log10(std::max(minFreqHz + 1.0f, maxFreqHz));
+                const float logF = logMin + (1.0f - t) * (logMax - logMin);
+                fHz = std::pow(10.0f, logF);
+                y = (1.0f - (logF - logMin) / (logMax - logMin)) * imageHeight;
             }
-        }
-        else
-        {
-            const int numFreqLabels = 6;
-
-            for (int i = 0; i < numFreqLabels; ++i)
+            else
             {
-                float normY = static_cast<float>(i) / (numFreqLabels - 1);
-                //int y = static_cast<int>(normY * imageHeight);
-                int y = imageHeight - 1 - static_cast<int>(normY * imageHeight);
-
-                float freq = normY * (sampleRate / 2.0f);
-
-                juce::String freqLabel = juce::String(freq / 1000.0f, 1) + " kHz";
-
-                // draw label box with dark background
-                juce::Rectangle<int> textBounds(2, y - 12, 60, 16);
-                g.setColour(juce::Colours::black.withAlpha(0.6f));
-                g.fillRect(textBounds);
-                // draw label
-                g.setColour(juce::Colours::white);
-                g.drawText(freqLabel, textBounds, juce::Justification::left);
-                // draw grid line
-                g.setColour(juce::Colours::darkgrey.withAlpha(gridAlpha));
-                g.drawHorizontalLine(y, 55.0f, static_cast<float>(width));
+                fHz = minFreqHz + (1.0f - t) * (maxFreqHz - minFreqHz);
+                y = (1.0f - (fHz - minFreqHz) / (maxFreqHz - minFreqHz)) * imageHeight;
             }
 
+            const int yi = juce::jlimit(0, imageHeight - 1, static_cast<int>(std::round(y)));
+            juce::String label = (fHz >= 1000.0f) ? juce::String(fHz / 1000.0f, 1) + " kHz"
+                : juce::String(static_cast<int>(std::round(fHz))) + " Hz";
+
+            juce::Rectangle<int> textBounds(2, yi - 12, 60, 16);
+            g.setColour(juce::Colours::black.withAlpha(0.6f)); g.fillRect(textBounds);
+            g.setColour(juce::Colours::white); g.drawText(label, textBounds, juce::Justification::left);
+            g.setColour(juce::Colours::darkgrey.withAlpha(gridAlpha));
+            g.drawHorizontalLine(yi, 55.0f, static_cast<float>(width));
         }
     }
 
@@ -1067,9 +1032,22 @@ void SpectrogramComponent::paint(juce::Graphics& g)
         if (currentMode == SpectrogramMode::Mel || currentMode == SpectrogramMode::MelPlus)
         {
             // melspectrogram
-            int melIndex = juce::jlimit(0, (int)melBandFrequencies.size() - 1,
-                (int)((float)imgY / getHeight() * melBandFrequencies.size()));
-            freq = melBandFrequencies[melBandFrequencies.size() - 1 - melIndex];
+            const float maxHz = static_cast<float>(sampleRate) * 0.5f;
+            const float fMin = juce::jlimit(1.0f, maxHz - 1.0f, minFreqHz);
+            const float fMax = juce::jlimit(fMin + 1.0f, maxHz, maxFreqHz);
+
+            auto hzToMel = [](float hz) { return 2595.0f * std::log10(1.0f + hz / 700.0f); };
+            auto melToHz = [](float mel) { return 700.0f * (std::pow(10.0f, mel / 2595.0f) - 1.0f); };
+
+            const int imageHeight = spectrogramImage.isValid() ? spectrogramImage.getHeight() : getHeight();
+            const float yNormTopToBottom = (float)imgY / juce::jmax(1, imageHeight - 1);
+            const float yFromBottom = 1.0f - yNormTopToBottom;
+
+            const float melMin = hzToMel(fMin);
+            const float melMax = hzToMel(fMax);
+            const float melVal = melMin + yFromBottom * (melMax - melMin);
+            freq = juce::jlimit(fMin, fMax, melToHz(melVal));
+            
             // get midi note name
             juce::String noteName;
             if (freq >= 20.0f && freq <= 20000.0f)
@@ -1121,16 +1099,24 @@ void SpectrogramComponent::paint(juce::Graphics& g)
         else
         {
             // STFT spectrogram
+            const float maxHz = static_cast<float>(sampleRate) * 0.5f;
+
+            const float fMin = juce::jlimit(1.0f, maxHz - 1.0f, minFreqHz);
+            const float fMax = juce::jlimit(fMin + 1.0f, maxHz, maxFreqHz);
+
+            const float yNormTopToBottom = (float)imgY / juce::jmax(1, getHeight() - 1);
+            const float yFromBottom = 1.0f - yNormTopToBottom;
+
             if (useLogFrequency)
             {
-                float logMinFreq = std::log10(30.0f);
-                float logMaxFreq = std::log10(maxFreq);
-                float logFreq = logMinFreq + (1.0f - (float)imgY / getHeight()) * (logMaxFreq - logMinFreq);
+                const float logMin = std::log10(fMin);
+                const float logMax = std::log10(fMax);
+                const float logFreq = logMin + yFromBottom * (logMax - logMin);
                 freq = std::pow(10.0f, logFreq);
             }
             else
             {
-                freq = (1.0f - (float)imgY / getHeight()) * maxFreq;
+                freq = fMin + yFromBottom * (fMax - fMin);
             }
             // get midi note name
             juce::String noteName;

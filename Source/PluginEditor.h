@@ -38,6 +38,9 @@ public:
     static constexpr const char* ShowMenuText = "+";
     static constexpr const char* HideMenuText = "-";
 
+    // update y range slider if sample rate changed
+    void refreshYRangeSliderForSampleRate(double sr);
+
 private:
     juce::TooltipWindow tooltipWindow;
 
@@ -81,6 +84,24 @@ private:
     juce::Slider floorDbSlider;
     // slider to change the norm factor of dB values
     juce::Slider normFactorSlider;
+
+    // slider y axis range
+    juce::Slider yRangeSlider;
+    juce::TextEditor yMinHzEdit;
+    juce::TextEditor yMaxHzEdit;
+    double lastYMinHz = 30.0;
+    double lastYMaxHz = 20000.0;
+    bool   updatingYControls = false;
+    // min. y range
+    static constexpr double kMinBandWidthHz = 10.0;
+
+    // row labels
+    juce::Label row1stLabel;
+    juce::Label row2ndLabel;
+    juce::Label row3rdLabel;
+    
+    // other labels
+    juce::Label menuDisplayLabel;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SpectrogramAudioProcessorEditor)
 };

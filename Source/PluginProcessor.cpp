@@ -83,6 +83,13 @@ void SpectrogramAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
     if (auto* ed = dynamic_cast<SpectrogramAudioProcessorEditor*>(getActiveEditor()))
     {
         ed->getSpectrogramComponent().setSampleRate(sampleRate);
+
+        // refresh UI
+        juce::MessageManager::callAsync([ed, sampleRate]
+        {
+            if (ed != nullptr)
+                ed->refreshYRangeSliderForSampleRate(sampleRate);
+        });
     }
 }
 

@@ -77,8 +77,24 @@ public:
     // Getter for current drawing mode
     SpectrogramMode getCurrentMode() const { return currentMode; }
 
+    // y axis frequency range
+    void setFrequencyRangeHz(float minHz, float maxHz)
+    {
+        const float nyquist = static_cast<float>(sampleRate) * 0.5f;
+        minHz = juce::jlimit(1.0f, nyquist - 1.0f, minHz);
+        maxHz = juce::jlimit(minHz + 1.0f, nyquist, maxHz);
+        minFreqHz = minHz;
+        maxFreqHz = maxHz;
+        repaint();
+    }
+    std::pair<float, float> getFrequencyRangeHz() const { return { minFreqHz, maxFreqHz }; }
+
 private:
     juce::Image spectrogramImage;
+
+    // y axis frequency range
+    float minFreqHz = 30.0f;
+    float maxFreqHz = 22050.0f;
 
     // FFT state
     int fftOrder = 11;  // default 2^11 = 2048

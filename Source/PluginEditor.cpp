@@ -35,16 +35,18 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
     toggleUiButton.setTooltip("Show/Hide control panels");
     toggleUiButton.setAlwaysOnTop(true);
     toggleUiButton.onClick = [this]()
-        {
-            controlsVisible = !controlsVisible;
-            updateControlsVisibility();
-            // switch arrow
-            toggleUiButton.setButtonText(controlsVisible ? HideMenuText : ShowMenuText);
-            resized();
-            repaint();
-        };
+    {
+        controlsVisible = !controlsVisible;
+        updateControlsVisibility();
+        // switch arrow
+        toggleUiButton.setButtonText(controlsVisible ? HideMenuText : ShowMenuText);
+        resized();
+        repaint();
+    };
     // init visibility
     updateControlsVisibility();
+
+    // ==== 1st row ====
 
     // Add and configure freeze button
     addAndMakeVisible(freezeButton);
@@ -55,6 +57,13 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
         freezeButton.setButtonText(isFrozen ? "Resume" : "Freeze");
         spectrogram.setFrozen(isFrozen);
     };
+
+    // Label
+    addAndMakeVisible(row1stLabel);
+    row1stLabel.setText("General:", juce::dontSendNotification);
+    row1stLabel.setJustificationType(juce::Justification::centredRight);
+    row1stLabel.setColour(juce::Label::textColourId, juce::Colours::white.withAlpha(0.5f));
+    row1stLabel.setInterceptsMouseClicks(false, false);
 
     // Add and configure FPS dropdown
     addAndMakeVisible(fpsBox);
@@ -91,25 +100,6 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
         repaint();
     };
 
-    // Add and configure scroll speed dropdown
-    addAndMakeVisible(scrollSpeedBox);
-    scrollSpeedBox.setTooltip(
-        "Horizontal scroll speed (x axis)"
-    );
-    scrollSpeedBox.addItem("x1", 1);
-    scrollSpeedBox.addItem("x2", 2);
-    scrollSpeedBox.addItem("x4", 4);
-    scrollSpeedBox.addItem("x8", 8);
-    scrollSpeedBox.addItem("x12", 12);
-    scrollSpeedBox.addItem("x16", 16);
-
-    scrollSpeedBox.setSelectedId(2); // default = 2
-    scrollSpeedBox.onChange = [this]()
-    {
-        const int sp = scrollSpeedBox.getSelectedId();
-        spectrogram.setScrollSpeedMultiplier(sp);
-    };
-
     // Add and configure overlap dropdown
     addAndMakeVisible(overlapBox);
     overlapBox.setTooltip("FFT overlap (1/2/4/8), corresponding to overlap ratio 0/50/75/87.5 %. Affects time resolution. The larger the overlap, the more FFTs are performed per second, which means increased CPU overhead.");
@@ -122,6 +112,15 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
     {
         spectrogram.setOverlap(overlapBox.getSelectedId());
     };
+
+    // ==== 2nd row ====
+    
+    // Label
+    addAndMakeVisible(row2ndLabel);
+    row2ndLabel.setText("Modes:", juce::dontSendNotification);
+    row2ndLabel.setJustificationType(juce::Justification::centredRight);
+    row2ndLabel.setColour(juce::Label::textColourId, juce::Colours::white.withAlpha(0.5f));
+    row2ndLabel.setInterceptsMouseClicks(false, false);
 
     // Add and configure colour scheme combo box
     addAndMakeVisible(colourSchemeBox);
@@ -166,12 +165,88 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
     spectrogramModeBox.setSelectedId(static_cast<int>(SpectrogramComponent::SpectrogramMode::Linear));  // default: linear
 
     spectrogramModeBox.onChange = [this]()
+    {
+        auto selectedId = spectrogramModeBox.getSelectedId();
+        spectrogram.setSpectrogramMode(static_cast<SpectrogramComponent::SpectrogramMode>(selectedId));
+        updateLegendImage();
+        repaint();
+    };
+
+    // Label
+    addAndMakeVisible(menuDisplayLabel);
+    menuDisplayLabel.setText("Display:", juce::dontSendNotification);
+    menuDisplayLabel.setJustificationType(juce::Justification::centredRight);
+    menuDisplayLabel.setColour(juce::Label::textColourId, juce::Colours::white.withAlpha(0.5f));
+    menuDisplayLabel.setInterceptsMouseClicks(false, false);
+
+    // Add and configure dB floor slider (lower limit)
+    addAndMakeVisible(floorDbSlider);
+    floorDbSlider.setTooltip(
+        "Set the dB floor (minimum brightness threshold) for spectrogram display.\n"
+        "Note: Not applicable in MFCC and Chroma mode"
+    );
+    floorDbSlider.setRange(-200.0, -1.0, 1.0);  // floor dB from -400 to -20
+    floorDbSlider.setValue(-100.0); // default: -100 dB
+    floorDbSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 80, 20);
+
+    floorDbSlider.onValueChange = [this]()
         {
-            auto selectedId = spectrogramModeBox.getSelectedId();
-            spectrogram.setSpectrogramMode(static_cast<SpectrogramComponent::SpectrogramMode>(selectedId));
+            float db = (float)floorDbSlider.getValue();
+            spectrogram.setFloorDb(db);
             updateLegendImage();
             repaint();
         };
+    // double click to reset
+    floorDbSlider.setDoubleClickReturnValue(true, -100.0);
+
+    // Add and configure norm factor slider (scale/brightness gain of dB values)
+    addAndMakeVisible(normFactorSlider);
+    normFactorSlider.setTooltip(
+        "Set brightness scale factor (norm factor) for spectrogram display.\n"
+        "Useful for adjusting overall dB level display."
+    );
+    normFactorSlider.setRange(0.001, 5.0, 0.001); // allow finer range
+    normFactorSlider.setSkewFactorFromMidPoint(1.0); // nonlinear feel
+    normFactorSlider.setValue(1.0);  // default
+    normFactorSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 80, 20);
+
+    normFactorSlider.onValueChange = [this]()
+        {
+            float scale = (float)normFactorSlider.getValue();
+            spectrogram.setNormFactor(scale);
+            updateLegendImage();
+            repaint();
+        };
+    // double click to reset
+    normFactorSlider.setDoubleClickReturnValue(true, 1.0);
+
+    // ==== 3rd row ====
+
+    // Label
+    addAndMakeVisible(row3rdLabel);
+    row3rdLabel.setText("Axes:", juce::dontSendNotification);
+    row3rdLabel.setJustificationType(juce::Justification::centredRight);
+    row3rdLabel.setColour(juce::Label::textColourId, juce::Colours::white.withAlpha(0.5f));
+    row3rdLabel.setInterceptsMouseClicks(false, false);
+
+    // Add and configure scroll speed dropdown
+    addAndMakeVisible(scrollSpeedBox);
+    scrollSpeedBox.setTooltip(
+        "Horizontal scroll speed (x axis)"
+    );
+    scrollSpeedBox.addItem("x1", 1);
+    scrollSpeedBox.addItem("x2", 2);
+    scrollSpeedBox.addItem("x4", 4);
+    scrollSpeedBox.addItem("x8", 8);
+    scrollSpeedBox.addItem("x12", 12);
+    scrollSpeedBox.addItem("x16", 16);
+
+    scrollSpeedBox.setSelectedId(2); // default = 2
+    scrollSpeedBox.onChange = [this]()
+    {
+        const int sp = scrollSpeedBox.getSelectedId();
+        spectrogram.setScrollSpeedMultiplier(sp);
+    };
 
     // Add and configure log scale (y axis) combo box
     addAndMakeVisible(logScaleBox);
@@ -189,48 +264,113 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
         spectrogram.setUseLogFrequency(useLog);
     };
 
-    // Add and configure dB floor slider (lower limit)
-    addAndMakeVisible(floorDbSlider);
-    floorDbSlider.setTooltip(
-        "Set the dB floor (minimum brightness threshold) for spectrogram display.\n"
-        "Note: Not applicable in MFCC and Chroma mode"
+    // y axis frequency range controls
+    addAndMakeVisible(yRangeSlider);
+    yRangeSlider.setTooltip(
+        "Y-axis lower/upper bound in Hz (min/max frequency)\n"
+        "Note: Not applicable in MFCC / Chroma mode"
     );
-    floorDbSlider.setRange(-200.0, -1.0, 1.0);  // floor dB from -400 to -20
-    floorDbSlider.setValue(-100.0); // default: -100 dB
-    floorDbSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 80, 20);
-    
-    floorDbSlider.onValueChange = [this]()
+    yRangeSlider.setSliderStyle(juce::Slider::TwoValueHorizontal);
+    yRangeSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    yRangeSlider.setPopupDisplayEnabled(false, false, nullptr);
+    yRangeSlider.setNumDecimalPlacesToDisplay(0);
+    // init maxHz
+    const double maxHz = audioProcessor.getSampleRate() * 0.5;
+    // range
+    yRangeSlider.setRange(30.0, maxHz, 1.0);
+    auto [fmin0, fmax0] = spectrogram.getFrequencyRangeHz();
+    if (fmin0 <= 0) fmin0 = 30.0f;
+    if (fmax0 <= 0) fmax0 = (float)maxHz;
+    // slider position
+    yRangeSlider.setMinAndMaxValues(fmin0, fmax0, juce::dontSendNotification);
+    lastYMinHz = fmin0;
+    lastYMaxHz = fmax0;
+    // text box
+    auto initHzEditor = [](juce::TextEditor& ed, const juce::String& tooltip)
     {
-        float db = (float)floorDbSlider.getValue();
-        spectrogram.setFloorDb(db);
-        updateLegendImage();
-        repaint();
+        ed.setTooltip(tooltip);
+        ed.setInputRestrictions(7, "0123456789");
+        ed.setJustification(juce::Justification::centredRight);
+        ed.setSelectAllWhenFocused(true);
+        ed.setTextToShowWhenEmpty("-", juce::Colours::grey);
+        //ed.setColour(juce::TextEditor::backgroundColourId, juce::Colours::black.withAlpha(0.12f));
+    };
+    addAndMakeVisible(yMinHzEdit);
+    addAndMakeVisible(yMaxHzEdit);
+    initHzEditor(yMinHzEdit, "Y-axis lower bound (Hz)");
+    initHzEditor(yMaxHzEdit, "Y-axis upper bound (Hz)");
+    yMinHzEdit.setJustification(juce::Justification::centred);
+    yMaxHzEdit.setJustification(juce::Justification::centred);
+    yMinHzEdit.setText(juce::String((int)fmin0), juce::dontSendNotification);
+    yMaxHzEdit.setText(juce::String((int)fmax0), juce::dontSendNotification);
+    enum class WhichEnd { Min, Max, Unknown };
+    auto applyYRange = [this](double a, double b, WhichEnd end)
+    {
+        if (updatingYControls) return;
+        juce::ScopedValueSetter<bool> guard(updatingYControls, true);
+
+        const double maxHzNow = audioProcessor.getSampleRate() * 0.5;
+
+        a = juce::jlimit(30.0, maxHzNow - kMinBandWidthHz, a);
+        b = juce::jlimit(30.0 + kMinBandWidthHz, maxHzNow, b);
+
+        // ensure min range
+        if (b - a < kMinBandWidthHz)
+        {
+            if (end == WhichEnd::Min)          b = std::min(maxHzNow, a + kMinBandWidthHz);
+            else if (end == WhichEnd::Max)     a = std::max(30.0, b - kMinBandWidthHz);
+            else {
+                b = std::max(b, a + kMinBandWidthHz);
+                b = std::min(b, maxHzNow);
+            }
+        }
+        // set values
+        yRangeSlider.setMinAndMaxValues(a, b, juce::dontSendNotification);
+
+        // set text box
+        yMinHzEdit.setText(juce::String((int)a), juce::dontSendNotification);
+        yMaxHzEdit.setText(juce::String((int)b), juce::dontSendNotification);
+
+        // apply to spectrogram
+        spectrogram.setFrequencyRangeHz((float)a, (float)b);
+
+        lastYMinHz = a;
+        lastYMaxHz = b;
+    };
+    // connect slider
+    yRangeSlider.onValueChange = [this, applyYRange]()
+    {
+        double a = yRangeSlider.getMinValue();
+        double b = yRangeSlider.getMaxValue();
+
+        WhichEnd end = std::abs(a - lastYMinHz) >= std::abs(b - lastYMaxHz) ? WhichEnd::Min : WhichEnd::Max;
+        applyYRange(a, b, end);
+    };
+    // connect text box
+    auto commitMin = [this, applyYRange]()
+    {
+        const double a = yMinHzEdit.getText().getDoubleValue();
+        const double b = yRangeSlider.getMaxValue();
+        applyYRange(a, b, WhichEnd::Min);
+    };
+    auto commitMax = [this, applyYRange]()
+    {
+        const double a = yRangeSlider.getMinValue();
+        const double b = yMaxHzEdit.getText().getDoubleValue();
+        applyYRange(a, b, WhichEnd::Max);
     };
 
+    yMinHzEdit.onReturnKey = commitMin;
+    yMinHzEdit.onFocusLost = commitMin;
+    yMaxHzEdit.onReturnKey = commitMax;
+    yMaxHzEdit.onFocusLost = commitMax;
     // double click to reset
-    floorDbSlider.setDoubleClickReturnValue(true, -100.0);
+    yRangeSlider.setMinAndMaxValues(30.0, audioProcessor.getSampleRate() * 0.5, juce::sendNotificationSync);
+    // refresh y range slider
+    const double srNow = audioProcessor.getSampleRate();
+    if (srNow > 0.0)
+        refreshYRangeSliderForSampleRate(srNow);
 
-    // Add and configure norm factor slider (scale/brightness gain of dB values)
-    addAndMakeVisible(normFactorSlider);
-    normFactorSlider.setTooltip(
-        "Set brightness scale factor (norm factor) for spectrogram display.\n"
-        "Useful for adjusting overall dB level display."
-    );
-    normFactorSlider.setRange(0.001, 5.0, 0.001); // allow finer range
-    normFactorSlider.setSkewFactorFromMidPoint(1.0); // nonlinear feel
-    normFactorSlider.setValue(1.0);  // default
-    normFactorSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 80, 20);
-
-    normFactorSlider.onValueChange = [this]()
-    {
-        float scale = (float)normFactorSlider.getValue();
-        spectrogram.setNormFactor(scale);
-        updateLegendImage();
-        repaint();
-    };
-
-    // double click to reset
-    normFactorSlider.setDoubleClickReturnValue(true, 1.0);
 
 }
 
@@ -294,18 +434,50 @@ void SpectrogramAudioProcessorEditor::updateLegendImage()
     }
 }
 
+void SpectrogramAudioProcessorEditor::refreshYRangeSliderForSampleRate(double sr)
+{
+    const double maxHz = sr * 0.5;
+
+    yRangeSlider.setRange(30.0, maxHz, 1.0);
+
+    auto [a0, b0] = spectrogram.getFrequencyRangeHz();
+    double a = juce::jlimit(1.0, maxHz - 1.0, (double)a0);
+    double b = juce::jlimit(a + kMinBandWidthHz, maxHz, (double)b0);
+
+    updatingYControls = true;
+    yRangeSlider.setMinAndMaxValues(a, b, juce::dontSendNotification);
+    yMinHzEdit.setText(juce::String((int)a), juce::dontSendNotification);
+    yMaxHzEdit.setText(juce::String((int)b), juce::dontSendNotification);
+    updatingYControls = false;
+
+    lastYMinHz = a;
+    lastYMaxHz = b;
+
+    spectrogram.setFrequencyRangeHz((float)a, (float)b);
+}
+
 void SpectrogramAudioProcessorEditor::updateControlsVisibility()
 {
+    // 1st
     freezeButton.setVisible(controlsVisible);
+    row1stLabel.setVisible(controlsVisible);
     fpsBox.setVisible(controlsVisible);
     fftSizeBox.setVisible(controlsVisible);
-    scrollSpeedBox.setVisible(controlsVisible);
     overlapBox.setVisible(controlsVisible);
+    // 2nd
+    row2ndLabel.setVisible(controlsVisible);
     colourSchemeBox.setVisible(controlsVisible);
     spectrogramModeBox.setVisible(controlsVisible);
+    menuDisplayLabel.setVisible(controlsVisible);
     logScaleBox.setVisible(controlsVisible);
     floorDbSlider.setVisible(controlsVisible);
     normFactorSlider.setVisible(controlsVisible);
+    // 3rd
+    row3rdLabel.setVisible(controlsVisible);
+    scrollSpeedBox.setVisible(controlsVisible);
+    yRangeSlider.setVisible(controlsVisible);
+    yMinHzEdit.setVisible(controlsVisible);
+    yMaxHzEdit.setVisible(controlsVisible);
 }
 
 void SpectrogramAudioProcessorEditor::resized()
@@ -324,30 +496,48 @@ void SpectrogramAudioProcessorEditor::resized()
     {
         // freeze button
         freezeButton.setBounds(topRow.removeFromLeft(100).reduced(5));
+        // label
+        row1stLabel.setBounds(topRow.removeFromLeft(60));
         // UI FPS
-        fpsBox.setBounds(topRow.removeFromLeft(100).reduced(5));
+        fpsBox.setBounds(topRow.removeFromLeft(90).reduced(5));
         // FFT size dropdown
-        fftSizeBox.setBounds(topRow.removeFromLeft(80).reduced(5));
+        fftSizeBox.setBounds(topRow.removeFromLeft(90).reduced(5));
         // overlap
-        overlapBox.setBounds(topRow.removeFromLeft(80).reduced(5));
-        // scroll speed
-        scrollSpeedBox.setBounds(topRow.removeFromLeft(80).reduced(5));
+        overlapBox.setBounds(topRow.removeFromLeft(90).reduced(5));
     }
 
-    // second row: dropdown menu etc.
+    // second row: spectrogram settings
     auto secondRow = area.removeFromTop(rowH);
     if (controlsVisible)
     {
+        // label
+        row2ndLabel.setBounds(secondRow.removeFromLeft(60));
         // colour scheme
         colourSchemeBox.setBounds(secondRow.removeFromLeft(100).reduced(5));
         // spectrogram mode
         spectrogramModeBox.setBounds(secondRow.removeFromLeft(100).reduced(5));
-        // y axis type: log or linear (for linear STFT spectrogram)
-        logScaleBox.setBounds(secondRow.removeFromLeft(100).reduced(5));
+        // label
+        menuDisplayLabel.setBounds(secondRow.removeFromLeft(60));
         // slider floor value colour scheme
         floorDbSlider.setBounds(secondRow.removeFromLeft(200).reduced(5));
         // slider norm factor
         normFactorSlider.setBounds(secondRow.removeFromLeft(200).reduced(5));
+    }
+
+    // third row: x/y axis control
+    auto thirdRow = area.removeFromTop(rowH);
+    if (controlsVisible)
+    {
+        // label
+        row3rdLabel.setBounds(thirdRow.removeFromLeft(60));
+        // x axis scroll speed
+        scrollSpeedBox.setBounds(thirdRow.removeFromLeft(100).reduced(5));
+        // y axis type: log or linear (for linear STFT spectrogram)
+        logScaleBox.setBounds(thirdRow.removeFromLeft(100).reduced(5));
+        // slider y axis range
+        yMinHzEdit.setBounds(thirdRow.removeFromLeft(80).reduced(5));
+        yRangeSlider.setBounds(thirdRow.removeFromLeft(200).reduced(5));
+        yMaxHzEdit.setBounds(thirdRow.removeFromLeft(80).reduced(5));
     }
 
     // rest: spectrogram
