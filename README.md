@@ -351,10 +351,11 @@ If you use **PerceptoMap** in academic work, please cite a tagged release.
   author  = {Qirui Huang},
   title   = {PerceptoMap},
   subtitle= {VST3 spectrogram and psychoacoustic visualizer},
-  version = {v0.7},
+  version = {v0.8},
   date    = {2025},
   url     = {https://github.com/hqrrr/PerceptoMap},
-  note    = {GitHub repository}
+  note    = {GitHub repository},
+  doi     = {10.5281/zenodo.16923138}
 }
 ```
 
