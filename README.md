@@ -5,6 +5,7 @@
 &nbsp;
 [![Platforms](https://img.shields.io/badge/Platforms-Windows%20|%20macOS%20|%20Linux-4c8eda)](https://github.com/hqrrr/PerceptoMap/releases)&nbsp;
 [![License](https://img.shields.io/github/license/hqrrr/PerceptoMap?color=888)](https://github.com/hqrrr/PerceptoMap/blob/main/LICENSE)&nbsp;
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.16923138.svg)](https://doi.org/10.5281/zenodo.16923138)
 
 ### Visualizing how we hear — from spectrograms to perception
 
