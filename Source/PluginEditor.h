@@ -52,6 +52,9 @@ private:
     juce::Image legendImage;
     void updateLegendImage();
 
+    // Disable/enable controls
+    void MenuDisableControl(SpectrogramComponent::SpectrogramMode mode);
+
     // display/hide menu button
     juce::TextButton toggleUiButton{HideMenuText};
     bool controlsVisible = true;
@@ -95,7 +98,11 @@ private:
     // min. y range
     static constexpr double kMinBandWidthHz = 10.0;
 
+    // y axis (note)
+    juce::ToggleButton noteAxisToggle;
+
     // row labels
+    float labelAlpha = 0.8f;
     juce::Label row1stLabel;
     juce::Label row2ndLabel;
     juce::Label row3rdLabel;

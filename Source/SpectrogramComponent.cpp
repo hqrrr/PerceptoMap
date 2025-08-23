@@ -266,6 +266,46 @@ void SpectrogramComponent::mouseExit(const juce::MouseEvent&)
     repaint();
 }
 
+int SpectrogramComponent::hzToY(float hz) const
+{
+    const int imageHeight = spectrogramImage.isValid() ? spectrogramImage.getHeight() : getHeight();
+    if (imageHeight <= 0) return 0;
+
+    if (currentMode == SpectrogramMode::Mel || currentMode == SpectrogramMode::MelPlus)
+    {
+        const float maxHz = static_cast<float>(sampleRate) * 0.5f;
+        const float fMin = juce::jlimit(1.0f, maxHz - 1.0f, minFreqHz);
+        const float fMax = juce::jlimit(fMin + 1.0f, maxHz, maxFreqHz);
+
+        const float melMin = hzToMel(fMin);
+        const float melMax = hzToMel(fMax);
+        const float mel = hzToMel(juce::jlimit(fMin, fMax, hz));
+        const float yNorm = (melMax - mel) / juce::jmax(1.0f, (melMax - melMin));
+        return juce::jlimit(0, imageHeight - 1, (int)std::lround(yNorm * (imageHeight - 1)));
+    }
+    else
+    {
+        const float fMin = minFreqHz;
+        const float fMax = maxFreqHz;
+        float yNorm = 0.0f;
+
+        if (useLogFrequency)
+        {
+            const float logMin = std::log10(juce::jmax(1.0f, fMin));
+            const float logMax = std::log10(juce::jmax(fMin + 1.0f, fMax));
+            const float logF = std::log10(juce::jlimit(juce::jmax(1.0f, fMin), juce::jmax(fMin + 1.0f, fMax), hz));
+            yNorm = (logMax - logF) / juce::jmax(1.0f, (logMax - logMin));
+        }
+        else
+        {
+            const float f = juce::jlimit(fMin, fMax, hz);
+            yNorm = (fMax - f) / juce::jmax(1.0f, (fMax - fMin));
+        }
+
+        return juce::jlimit(0, imageHeight - 1, (int)std::lround(yNorm * (imageHeight - 1)));
+    }
+}
+
 void SpectrogramComponent::drawLinearSpectrogram(int x, std::vector<float>& dBColumn, const int imageHeight, const float maxFreq)
 {
     // default: linear STFT spectrogram
@@ -323,15 +363,6 @@ void SpectrogramComponent::drawMelSpectrogram(int x, std::vector<float>& dBColum
 
     const float maxHz = static_cast<float>(sampleRate) * 0.5f;
 
-    // Slaney-style Mel: mel = 2595 * log10(1 + f / 700)
-    auto hzToMel = [](float hz) {
-        return 2595.0f * std::log10(1.0f + hz / 700.0f);
-        };
-
-    auto melToHz = [](float mel) {
-        return 700.0f * (std::pow(10.0f, mel / 2595.0f) - 1.0f);
-        };
-
     const float melMin = hzToMel(std::max(1.0f, minFreqHz));
     const float melMax = hzToMel(std::max(minFreqHz + 1.0f, maxFreqHz));
 
@@ -372,9 +403,6 @@ void SpectrogramComponent::drawMFCC(int x, std::vector<float>& dBColumn, const i
     // Mel-frequency cepstral coefficient (MFCC)
     std::vector<float> melEnergies(melBands, 0.0f);
     const float maxHz = static_cast<float>(sampleRate) / 2.0f;
-    // Slaney-style mel scale
-    auto hzToMel = [](float hz) { return 2595.0f * std::log10(1.0f + hz / 700.0f); };
-    auto melToHz = [](float mel) { return 700.0f * (std::pow(10.0f, mel / 2595.0f) - 1.0f); };
 
     float melMin = hzToMel(0.0f), melMax = hzToMel(maxHz);
 
@@ -678,8 +706,6 @@ void SpectrogramComponent::drawReassignedMelSpectrogram(
     int x, std::vector<float>& dBColumn, int imageHeight)
 {
     const float maxHz = static_cast<float>(sampleRate) / 2.0f;
-    auto hzToMel = [](float hz) { return 2595.0f * std::log10(1.0f + hz / 700.0f); };
-    auto melToHz = [](float mel) { return 700.0f * (std::pow(10.0f, mel / 2595.0f) - 1.0f); };
     const float melMin = hzToMel(std::max(1.0f, minFreqHz));
     const float melMax = hzToMel(std::max(minFreqHz + 1.0f, maxFreqHz));
 
@@ -818,33 +844,332 @@ void SpectrogramComponent::drawNextLineOfSpectrogram()
 
     switch (currentMode)
     {
-    case SpectrogramMode::Mel:
-        SpectrogramComponent::drawMelSpectrogram(x, dBColumn, imageHeight);
-        break;
-    case SpectrogramMode::MFCC:
-        SpectrogramComponent::drawMFCC(x, dBColumn, imageHeight);
-        break;
-    case SpectrogramMode::LinearWithCentroid:
-        SpectrogramComponent::drawLinearWithCentroid(x, dBColumn, imageHeight, maxFreq);
-        break;
-    case SpectrogramMode::Chroma:
-        SpectrogramComponent::drawChroma(x, dBColumn, imageHeight);
-        break;
-    case SpectrogramMode::LinearPlus:
-        SpectrogramComponent::drawReassignedSpectrogram(x, dBColumn, imageHeight, maxFreq);
-        break;
-    case SpectrogramMode::MelPlus:
-        drawReassignedMelSpectrogram(x, dBColumn, imageHeight);
-        break;
-    default:
-        SpectrogramComponent::drawLinearSpectrogram(x, dBColumn, imageHeight, maxFreq);
-        break;
+        case SpectrogramMode::Mel:
+            drawMelSpectrogram(x, dBColumn, imageHeight);
+            break;
+        case SpectrogramMode::MFCC:
+            drawMFCC(x, dBColumn, imageHeight);
+            break;
+        case SpectrogramMode::LinearWithCentroid:
+            drawLinearWithCentroid(x, dBColumn, imageHeight, maxFreq);
+            break;
+        case SpectrogramMode::Chroma:
+            drawChroma(x, dBColumn, imageHeight);
+            break;
+        case SpectrogramMode::LinearPlus:
+            drawReassignedSpectrogram(x, dBColumn, imageHeight, maxFreq);
+            break;
+        case SpectrogramMode::MelPlus:
+            drawReassignedMelSpectrogram(x, dBColumn, imageHeight);
+            break;
+        default:
+            drawLinearSpectrogram(x, dBColumn, imageHeight, maxFreq);
+            break;
     }
 
     if (dBBuffer.size() >= imageWidth)
         dBBuffer.erase(dBBuffer.begin());
 
     dBBuffer.push_back(dBColumn);
+}
+
+void SpectrogramComponent::paintMelYAxis(juce::Graphics& g, const int width, const int imageHeight)
+{
+    // Mel scale tick positions (Slaney-style spacing, approximate)
+    const int melBands = imageHeight;
+    const int numLabels = 10;
+
+    const float melMin = hzToMel(std::max(1.0f, minFreqHz));
+    const float melMax = hzToMel(std::max(minFreqHz + 1.0f, maxFreqHz));
+
+    for (int i = 0; i < numLabels; ++i)
+    {
+        float yNorm = static_cast<float>(i) / (numLabels - 1);
+        float mel = melMax - yNorm * (melMax - melMin);
+        float freq = melToHz(mel);
+        const int y = juce::jlimit(0, imageHeight - 1, (int)std::lround(yNorm * (imageHeight - 1)));
+
+        juce::String label = freq >= 1000.0f ? juce::String(freq / 1000.0f, 1) + " kHz"
+            : juce::String(static_cast<int>(freq)) + " Hz";
+
+        // draw label box with dark background
+        juce::Rectangle<int> textBounds(2, y - 12, 60, 16);
+        g.setColour(juce::Colours::black.withAlpha(0.6f));
+        g.fillRect(textBounds);
+        // draw label
+        g.setColour(juce::Colours::white);
+        g.drawText(label, textBounds, juce::Justification::left);
+        // draw grid line
+        g.setColour(juce::Colours::darkgrey.withAlpha(gridAlpha));
+        g.drawHorizontalLine(y, 55.0f, static_cast<float>(width));
+    }
+}
+
+void SpectrogramComponent::paintMFCCYAxis(juce::Graphics& g, const int width, const int imageHeight)
+{
+    // MFCC labels
+    for (int i = 0; i < numLabels; ++i)
+    {
+        float frac = static_cast<float>(i) / (numLabels - 1);
+        int coeffIndex = static_cast<int>(frac * (numCoeffs - 1));
+        int y = static_cast<int>((1.0f - frac) * (imageHeight - 1));
+
+        // Draw label
+        juce::Rectangle<int> textBounds(2, y - 8, 60, 16);
+        g.setColour(juce::Colours::black.withAlpha(0.6f));
+        g.fillRect(textBounds);
+        g.setColour(juce::Colours::white);
+        g.drawText("MFCC " + juce::String(coeffIndex), textBounds, juce::Justification::left);
+
+        // Grid line
+        g.setColour(juce::Colours::darkgrey.withAlpha(gridAlpha));
+        g.drawHorizontalLine(y, 55.0f, static_cast<float>(width));
+    }
+}
+
+void SpectrogramComponent::paintChromaYAxis(juce::Graphics& g, const int width, const int imageHeight)
+{
+    const float blockHeight = static_cast<float>(imageHeight) / numChroma;
+
+    for (int i = 0; i < 12; ++i)
+    {
+        //float normY = static_cast<float>(i) / 11.0f;
+        int y = static_cast<int>((numChroma - 1 - i) * blockHeight);
+
+        juce::Rectangle<int> textBounds(2, y - 8, 60, 16);
+        g.setColour(juce::Colours::black.withAlpha(0.6f));
+        g.fillRect(textBounds);
+        g.setColour(juce::Colours::white);
+        g.drawText(pitchNames[i], textBounds, juce::Justification::left);
+
+        g.setColour(juce::Colours::darkgrey.withAlpha(gridAlpha));
+        g.drawHorizontalLine(y, 55.0f, static_cast<float>(width));
+    }
+}
+
+void SpectrogramComponent::paintSTFTYAxis(juce::Graphics& g, const int width, const int imageHeight)
+{
+    // log y axis or linear, for Linear / Linear+ / Linear+Centroid
+    const int numLabels = 10;
+    for (int i = 0; i < numLabels; ++i)
+    {
+        const float t = static_cast<float>(i) / (numLabels - 1);
+        float fHz = 0.0f;
+        float y = 0.0f;
+
+        if (useLogFrequency)
+        {
+            const float logMin = std::log10(std::max(1.0f, minFreqHz));
+            const float logMax = std::log10(std::max(minFreqHz + 1.0f, maxFreqHz));
+            const float logF = logMin + (1.0f - t) * (logMax - logMin);
+            fHz = std::pow(10.0f, logF);
+            y = (1.0f - (logF - logMin) / (logMax - logMin)) * imageHeight;
+        }
+        else
+        {
+            fHz = minFreqHz + (1.0f - t) * (maxFreqHz - minFreqHz);
+            y = (1.0f - (fHz - minFreqHz) / (maxFreqHz - minFreqHz)) * imageHeight;
+        }
+
+        const int yi = juce::jlimit(0, imageHeight - 1, static_cast<int>(std::round(y)));
+        juce::String label = (fHz >= 1000.0f) ? juce::String(fHz / 1000.0f, 1) + " kHz"
+            : juce::String(static_cast<int>(std::round(fHz))) + " Hz";
+
+        juce::Rectangle<int> textBounds(2, yi - 12, 60, 16);
+        g.setColour(juce::Colours::black.withAlpha(0.6f)); g.fillRect(textBounds);
+        g.setColour(juce::Colours::white); g.drawText(label, textBounds, juce::Justification::left);
+        g.setColour(juce::Colours::darkgrey.withAlpha(gridAlpha));
+        g.drawHorizontalLine(yi, 55.0f, static_cast<float>(width));
+    }
+}
+
+void SpectrogramComponent::paintNoteYAxis(juce::Graphics& g, const bool modeSupportsNoteAxis)
+{
+    if (modeSupportsNoteAxis)
+    {
+        const int width = getWidth();
+        const int imageHeight = spectrogramImage.getHeight();
+
+        // inner margin and scale settings
+        const int axisRightX = width - 30;
+        const int majorTickLen = 12;  // C
+        const int minorTickLen = 6;   // others
+        const int labelBoxW = 18;
+        const int labelBoxH = 16;
+
+        // A4 = 440 Hz，midi = 69 + 12*log2(f/440)
+        auto midiToHz = [](int m) { return 440.0f * std::pow(2.0f, (m - 69) / 12.0f); };
+
+        // Calculate the MIDI range
+        const float fMin = juce::jmax(1.0f, minFreqHz);
+        const float fMax = juce::jmax(fMin + 1.0f, maxFreqHz);
+        auto hzToMidi = [](float hz) { return 69.0f + 12.0f * std::log2(hz / 440.0f); };
+        int midiStart = (int)std::floor(hzToMidi(fMin));
+        int midiEnd = (int)std::ceil(hzToMidi(fMax));
+
+        // limit to 0-127
+        midiStart = juce::jlimit(0, 127, midiStart);
+        midiEnd = juce::jlimit(0, 127, midiEnd);
+
+        // Draw axis.
+        g.setColour(juce::Colours::white.withAlpha(0.4f));
+        g.drawLine((float)axisRightX, 0.0f, (float)axisRightX, (float)imageHeight);
+
+        // draw long tick for C note (m % 12 == 0) and add a label
+        // draw short ticks for all others
+        for (int m = midiStart; m <= midiEnd; ++m)
+        {
+            const float hz = midiToHz(m);
+            const int y = hzToY(hz);
+
+            const bool isC = (m % 12 == 0);
+            const int tickLen = isC ? majorTickLen : minorTickLen;
+
+            // tick
+            g.setColour(juce::Colours::white.withAlpha(isC ? 0.9f : 0.5f));
+            g.drawLine((float)axisRightX, (float)y, (float)(axisRightX - tickLen), (float)y);
+
+            // label for C
+            if (isC)
+            {
+                // octave = floor(m/12) - 1, m=60 -> C4
+                const int octave = (m / 12) - 1;
+                juce::String label = "C" + juce::String(octave);
+
+                // background frame
+                juce::Rectangle<int> textBounds(axisRightX - tickLen - labelBoxW - 2, y - labelBoxH / 2, labelBoxW, labelBoxH);
+                g.setColour(juce::Colours::black.withAlpha(0.4f));
+                g.fillRect(textBounds);
+
+                g.setColour(juce::Colours::white);
+                g.setFont(12.0f);
+                g.drawText(label, textBounds, juce::Justification::centred, true);
+            }
+        }
+    }
+}
+
+juce::String SpectrogramComponent::drawMelTooltip(float dB, const int imgY, float freq)
+{
+    // melspectrogram
+    const float maxHz = static_cast<float>(sampleRate) * 0.5f;
+    const float fMin = juce::jlimit(1.0f, maxHz - 1.0f, minFreqHz);
+    const float fMax = juce::jlimit(fMin + 1.0f, maxHz, maxFreqHz);
+
+    const int imageHeight = spectrogramImage.isValid() ? spectrogramImage.getHeight() : getHeight();
+    const float yNormTopToBottom = (float)imgY / juce::jmax(1, imageHeight - 1);
+    const float yFromBottom = 1.0f - yNormTopToBottom;
+
+    const float melMin = hzToMel(fMin);
+    const float melMax = hzToMel(fMax);
+    const float melVal = melMin + yFromBottom * (melMax - melMin);
+    freq = juce::jlimit(fMin, fMax, melToHz(melVal));
+
+    // get midi note name
+    juce::String noteName;
+    if (freq >= 20.0f && freq <= 20000.0f)
+    {
+        int midiNote = (int)std::round(69 + 12 * std::log2(freq / 440.0f));
+        if (midiNote >= 0 && midiNote <= 127)
+        {
+            // octave for middle C: C4
+            noteName = juce::MidiMessage::getMidiNoteName(midiNote, true, true, 4);
+        }
+        else
+        {
+            noteName = "(out of range)";
+        }
+    }
+    else
+    {
+        noteName = "(out of range)";
+    }
+    // generate tooltip text
+    juce::String labelText = juce::String(freq, 1) + " Hz, " + (noteName.isNotEmpty() ? "note: " + noteName : "")
+        + ", " + juce::String(dB, 1) + " dB";
+    
+    return labelText;
+}
+
+juce::String SpectrogramComponent::drawMFCCTooltip(float dB, const int imgY, const int imageHeight)
+{
+    // MFCC
+    float frac = static_cast<float>(imgY) / (imageHeight - 1);
+    int coeffIndex = static_cast<int>((1.0f - frac) * (numCoeffs - 1));
+    coeffIndex = juce::jlimit(0, numCoeffs - 1, coeffIndex);
+
+    // Note: dB is actually MFCC (unitless), not decibel
+    float norm = juce::jlimit(mfccMin, mfccMax, dB);
+    float brightness = juce::jmap(norm, mfccMin, mfccMax, 0.0f, 1.0f);
+
+    juce::String labelText = "MFCC " + juce::String(coeffIndex) + ", " + juce::String(brightness, 2)
+        + " (normalized)";
+
+    return labelText;
+}
+
+juce::String SpectrogramComponent::drawChromaTooltip(const int dBIndex, const int imgY, const int imageHeight)
+{
+    // Chromagram
+    float blockHeight = static_cast<float>(imageHeight) / numChroma;
+    int chromaIndex = static_cast<int>((imageHeight - 1 - imgY) / blockHeight);
+    chromaIndex = juce::jlimit(0, numChroma - 1, chromaIndex);
+    juce::String pitchName = pitchNames[chromaIndex];
+
+    float brightness = juce::jlimit(0.0f, 1.0f, dBBuffer[dBIndex][imgY]);
+    //float brightness = juce::jlimit(0.0f, 1.0f, dBBuffer[dBIndex][chromaIndex]);
+
+    juce::String labelText = "Pitch Class: " + pitchName + ", " + juce::String(brightness, 2);
+
+    return labelText;
+}
+
+juce::String SpectrogramComponent::drawSTFTTooltip(float dB, const int imgY, float freq)
+{
+    // STFT spectrogram
+    const float maxHz = static_cast<float>(sampleRate) * 0.5f;
+
+    const float fMin = juce::jlimit(1.0f, maxHz - 1.0f, minFreqHz);
+    const float fMax = juce::jlimit(fMin + 1.0f, maxHz, maxFreqHz);
+
+    const float yNormTopToBottom = (float)imgY / juce::jmax(1, getHeight() - 1);
+    const float yFromBottom = 1.0f - yNormTopToBottom;
+
+    if (useLogFrequency)
+    {
+        const float logMin = std::log10(fMin);
+        const float logMax = std::log10(fMax);
+        const float logFreq = logMin + yFromBottom * (logMax - logMin);
+        freq = std::pow(10.0f, logFreq);
+    }
+    else
+    {
+        freq = fMin + yFromBottom * (fMax - fMin);
+    }
+    // get midi note name
+    juce::String noteName;
+    if (freq >= 20.0f && freq <= 20000.0f)
+    {
+        int midiNote = (int)std::round(69 + 12 * std::log2(freq / 440.0f));
+        if (midiNote >= 0 && midiNote <= 127)
+        {
+            // octave for middle C: C4
+            noteName = juce::MidiMessage::getMidiNoteName(midiNote, true, true, 4);
+        }
+        else
+        {
+            noteName = "(out of range)";
+        }
+    }
+    else
+    {
+        noteName = "(out of range)";
+    }
+    // generate tooltip text
+    juce::String labelText = juce::String(freq, 1) + " Hz, " + (noteName.isNotEmpty() ? "note: " + noteName : "")
+        + ", " + juce::String(dB, 1) + " dB";
+
+    return labelText;
 }
 
 void SpectrogramComponent::paint(juce::Graphics& g)
@@ -862,113 +1187,42 @@ void SpectrogramComponent::paint(juce::Graphics& g)
     const int imageHeight = spectrogramImage.getHeight();
 
     // draw y axis (frequency)
-    if (currentMode == SpectrogramMode::Mel || currentMode == SpectrogramMode::MelPlus)
+    switch (currentMode)
     {
-        // Mel scale tick positions (Slaney-style spacing, approximate)
-        const int melBands = imageHeight;
-        const int numLabels = 10;
-
-        auto hzToMel = [](float hz) { return 2595.0f * std::log10(1.0f + hz / 700.0f); };
-        auto melToHz = [](float mel) { return 700.0f * (std::pow(10.0f, mel / 2595.0f) - 1.0f); };
-        const float melMin = hzToMel(std::max(1.0f, minFreqHz));
-        const float melMax = hzToMel(std::max(minFreqHz + 1.0f, maxFreqHz));
-
-        for (int i = 0; i < numLabels; ++i)
-        {
-            float yNorm = static_cast<float>(i) / (numLabels - 1);
-            float mel = melMax - yNorm * (melMax - melMin);
-            float freq = melToHz(mel);
-            const int y = juce::jlimit(0, imageHeight - 1, (int)std::lround(yNorm * (imageHeight - 1)));
-
-            juce::String label = freq >= 1000.0f ? juce::String(freq / 1000.0f, 1) + " kHz"
-                : juce::String(static_cast<int>(freq)) + " Hz";
-
-            // draw label box with dark background
-            juce::Rectangle<int> textBounds(2, y - 12, 60, 16);
-            g.setColour(juce::Colours::black.withAlpha(0.6f));
-            g.fillRect(textBounds);
-            // draw label
-            g.setColour(juce::Colours::white);
-            g.drawText(label, textBounds, juce::Justification::left);
-            // draw grid line
-            g.setColour(juce::Colours::darkgrey.withAlpha(gridAlpha));
-            g.drawHorizontalLine(y, 55.0f, static_cast<float>(width));
-        }
+        case SpectrogramMode::Mel:
+            paintMelYAxis(g, width, imageHeight);
+            break;
+        case SpectrogramMode::MelPlus:
+            paintMelYAxis(g, width, imageHeight);
+            break;
+        case SpectrogramMode::MFCC:
+            paintMFCCYAxis(g, width, imageHeight);
+            break;
+        case SpectrogramMode::Chroma:
+            paintChromaYAxis(g, width, imageHeight);
+            break;
+        case SpectrogramMode::LinearWithCentroid:
+            paintSTFTYAxis(g, width, imageHeight);
+            break;
+        case SpectrogramMode::LinearPlus:
+            paintSTFTYAxis(g, width, imageHeight);
+            break;
+    
+        default:
+            paintSTFTYAxis(g, width, imageHeight);
+            break;
     }
-    else if (currentMode == SpectrogramMode::MFCC)
+
+    // draw y axis (note)
+    const bool modeSupportsNoteAxis =
+        (currentMode == SpectrogramMode::Linear) ||
+        (currentMode == SpectrogramMode::LinearPlus) ||
+        (currentMode == SpectrogramMode::LinearWithCentroid) ||
+        (currentMode == SpectrogramMode::Mel) ||
+        (currentMode == SpectrogramMode::MelPlus);
+    if (showNoteCAxis)
     {
-        // MFCC labels
-        for (int i = 0; i < numLabels; ++i)
-        {
-            float frac = static_cast<float>(i) / (numLabels - 1);
-            int coeffIndex = static_cast<int>(frac * (numCoeffs - 1));
-            int y = static_cast<int>((1.0f - frac) * (imageHeight - 1));
-
-            // Draw label
-            juce::Rectangle<int> textBounds(2, y - 8, 60, 16);
-            g.setColour(juce::Colours::black.withAlpha(0.6f));
-            g.fillRect(textBounds);
-            g.setColour(juce::Colours::white);
-            g.drawText("MFCC " + juce::String(coeffIndex), textBounds, juce::Justification::left);
-
-            // Grid line
-            g.setColour(juce::Colours::darkgrey.withAlpha(gridAlpha));
-            g.drawHorizontalLine(y, 55.0f, static_cast<float>(width));
-        }
-    }
-    else if (currentMode == SpectrogramMode::Chroma)
-    {
-        const float blockHeight = static_cast<float>(imageHeight) / numChroma;
-
-        for (int i = 0; i < 12; ++i)
-        {
-            //float normY = static_cast<float>(i) / 11.0f;
-            int y = static_cast<int>((numChroma - 1 - i) * blockHeight);
-
-            juce::Rectangle<int> textBounds(2, y - 8, 60, 16);
-            g.setColour(juce::Colours::black.withAlpha(0.6f));
-            g.fillRect(textBounds);
-            g.setColour(juce::Colours::white);
-            g.drawText(pitchNames[i], textBounds, juce::Justification::left);
-
-            g.setColour(juce::Colours::darkgrey.withAlpha(gridAlpha));
-            g.drawHorizontalLine(y, 55.0f, static_cast<float>(width));
-        }
-    }
-    else
-    {
-        // log y axis or linear, for Linear / Linear+ / Linear+Centroid
-        const int numLabels = 10;
-        for (int i = 0; i < numLabels; ++i)
-        {
-            const float t = static_cast<float>(i) / (numLabels - 1);
-            float fHz = 0.0f;
-            float y = 0.0f;
-
-            if (useLogFrequency)
-            {
-                const float logMin = std::log10(std::max(1.0f, minFreqHz));
-                const float logMax = std::log10(std::max(minFreqHz + 1.0f, maxFreqHz));
-                const float logF = logMin + (1.0f - t) * (logMax - logMin);
-                fHz = std::pow(10.0f, logF);
-                y = (1.0f - (logF - logMin) / (logMax - logMin)) * imageHeight;
-            }
-            else
-            {
-                fHz = minFreqHz + (1.0f - t) * (maxFreqHz - minFreqHz);
-                y = (1.0f - (fHz - minFreqHz) / (maxFreqHz - minFreqHz)) * imageHeight;
-            }
-
-            const int yi = juce::jlimit(0, imageHeight - 1, static_cast<int>(std::round(y)));
-            juce::String label = (fHz >= 1000.0f) ? juce::String(fHz / 1000.0f, 1) + " kHz"
-                : juce::String(static_cast<int>(std::round(fHz))) + " Hz";
-
-            juce::Rectangle<int> textBounds(2, yi - 12, 60, 16);
-            g.setColour(juce::Colours::black.withAlpha(0.6f)); g.fillRect(textBounds);
-            g.setColour(juce::Colours::white); g.drawText(label, textBounds, juce::Justification::left);
-            g.setColour(juce::Colours::darkgrey.withAlpha(gridAlpha));
-            g.drawHorizontalLine(yi, 55.0f, static_cast<float>(width));
-        }
+        paintNoteYAxis(g, modeSupportsNoteAxis);
     }
 
     // draw x axis (time)
@@ -1000,7 +1254,6 @@ void SpectrogramComponent::paint(juce::Graphics& g)
         const int colX = juce::jlimit(0, imgW - 1,
             (mousePosition.x - bounds.getX()) * imgW / juce::jmax(1, bounds.getWidth()));
 
-
         // Y
         const int imgY = juce::jlimit(0, imgH - 1,
             (mousePosition.y - bounds.getY()) * imgH / juce::jmax(1, bounds.getHeight()));
@@ -1029,116 +1282,30 @@ void SpectrogramComponent::paint(juce::Graphics& g)
 
         juce::String labelText;
 
-        if (currentMode == SpectrogramMode::Mel || currentMode == SpectrogramMode::MelPlus)
+        switch (currentMode)
         {
-            // melspectrogram
-            const float maxHz = static_cast<float>(sampleRate) * 0.5f;
-            const float fMin = juce::jlimit(1.0f, maxHz - 1.0f, minFreqHz);
-            const float fMax = juce::jlimit(fMin + 1.0f, maxHz, maxFreqHz);
+            case SpectrogramMode::Mel:
+                labelText = drawMelTooltip(dB, imgY, freq);
+                break;
+            case SpectrogramMode::MelPlus:
+                labelText = drawMelTooltip(dB, imgY, freq);
+                break;
+            case SpectrogramMode::MFCC:
+                labelText = drawMFCCTooltip(dB, imgY, imageHeight);
+                break;
+            case SpectrogramMode::Chroma:
+                labelText = drawChromaTooltip(dBIndex, imgY, imageHeight);
+                break;
+            case SpectrogramMode::LinearWithCentroid:
+                labelText = drawSTFTTooltip(dB, imgY, freq);
+                break;
+            case SpectrogramMode::LinearPlus:
+                labelText = drawSTFTTooltip(dB, imgY, freq);
+                break;
 
-            auto hzToMel = [](float hz) { return 2595.0f * std::log10(1.0f + hz / 700.0f); };
-            auto melToHz = [](float mel) { return 700.0f * (std::pow(10.0f, mel / 2595.0f) - 1.0f); };
-
-            const int imageHeight = spectrogramImage.isValid() ? spectrogramImage.getHeight() : getHeight();
-            const float yNormTopToBottom = (float)imgY / juce::jmax(1, imageHeight - 1);
-            const float yFromBottom = 1.0f - yNormTopToBottom;
-
-            const float melMin = hzToMel(fMin);
-            const float melMax = hzToMel(fMax);
-            const float melVal = melMin + yFromBottom * (melMax - melMin);
-            freq = juce::jlimit(fMin, fMax, melToHz(melVal));
-            
-            // get midi note name
-            juce::String noteName;
-            if (freq >= 20.0f && freq <= 20000.0f)
-            {
-                int midiNote = (int)std::round(69 + 12 * std::log2(freq / 440.0f));
-                if (midiNote >= 0 && midiNote <= 127)
-                {
-                    // octave for middle C: C4
-                    noteName = juce::MidiMessage::getMidiNoteName(midiNote, true, true, 4);
-                }
-                else
-                {
-                    noteName = "(out of range)";
-                }
-            }
-            else
-            {
-                noteName = "(out of range)";
-            }
-            // generate tooltip text
-            labelText = juce::String(freq, 1) + " Hz, " + (noteName.isNotEmpty() ? "note: " + noteName : "") + ", " + juce::String(dB, 1) + " dB";
-        }
-        else if (currentMode == SpectrogramMode::MFCC)
-        {
-            // MFCC
-            float frac = static_cast<float>(imgY) / (imageHeight - 1);
-            int coeffIndex = static_cast<int>((1.0f - frac) * (numCoeffs - 1));
-            coeffIndex = juce::jlimit(0, numCoeffs - 1, coeffIndex);
-
-            // Note: dB is actually MFCC (unitless), not decibel
-            float norm = juce::jlimit(mfccMin, mfccMax, dB);
-            float brightness = juce::jmap(norm, mfccMin, mfccMax, 0.0f, 1.0f);
-
-            labelText = "MFCC " + juce::String(coeffIndex) + ", " + juce::String(brightness, 2) + " (normalized)";
-        }
-        else if (currentMode == SpectrogramMode::Chroma)
-        {
-            // Chromagram
-            float blockHeight = static_cast<float>(imageHeight) / numChroma;
-            int chromaIndex = static_cast<int>((imageHeight - 1 - imgY) / blockHeight);
-            chromaIndex = juce::jlimit(0, numChroma - 1, chromaIndex);
-            juce::String pitchName = pitchNames[chromaIndex];
-
-            float brightness = juce::jlimit(0.0f, 1.0f, dBBuffer[dBIndex][imgY]);
-            //float brightness = juce::jlimit(0.0f, 1.0f, dBBuffer[dBIndex][chromaIndex]);
-
-            labelText = "Pitch Class: " + pitchName + ", " + juce::String(brightness, 2);
-        }
-        else
-        {
-            // STFT spectrogram
-            const float maxHz = static_cast<float>(sampleRate) * 0.5f;
-
-            const float fMin = juce::jlimit(1.0f, maxHz - 1.0f, minFreqHz);
-            const float fMax = juce::jlimit(fMin + 1.0f, maxHz, maxFreqHz);
-
-            const float yNormTopToBottom = (float)imgY / juce::jmax(1, getHeight() - 1);
-            const float yFromBottom = 1.0f - yNormTopToBottom;
-
-            if (useLogFrequency)
-            {
-                const float logMin = std::log10(fMin);
-                const float logMax = std::log10(fMax);
-                const float logFreq = logMin + yFromBottom * (logMax - logMin);
-                freq = std::pow(10.0f, logFreq);
-            }
-            else
-            {
-                freq = fMin + yFromBottom * (fMax - fMin);
-            }
-            // get midi note name
-            juce::String noteName;
-            if (freq >= 20.0f && freq <= 20000.0f)
-            {
-                int midiNote = (int)std::round(69 + 12 * std::log2(freq / 440.0f));
-                if (midiNote >= 0 && midiNote <= 127)
-                {
-                    // octave for middle C: C4
-                    noteName = juce::MidiMessage::getMidiNoteName(midiNote, true, true, 4);
-                }
-                else
-                {
-                    noteName = "(out of range)";
-                }
-            }
-            else
-            {
-                noteName = "(out of range)";
-            }
-            // generate tooltip text
-            labelText = juce::String(freq, 1) + " Hz, " + (noteName.isNotEmpty() ? "note: " + noteName : "") + ", " + juce::String(dB, 1) + " dB";
+            default:
+                labelText = drawSTFTTooltip(dB, imgY, freq);
+                break;
         }
 
         // Draw fixed box under legend bar (top right)
@@ -1232,76 +1399,83 @@ juce::Colour SpectrogramComponent::getColourForValue(float value)
 
     switch (colourScheme)
     {
-    case ColourScheme::Classic:
-        return juce::Colour::fromHSV(value, 1.0f, value, 1.0f);
+        case ColourScheme::Classic:
+            return juce::Colour::fromHSV(value, 1.0f, value, 1.0f);
 
-    case ColourScheme::Grayscale:
-        return juce::Colour::fromFloatRGBA(value, value, value, 1.0f);
+        case ColourScheme::Grayscale:
+            return juce::Colour::fromFloatRGBA(value, value, value, 1.0f);
 
-    case ColourScheme::GrayscaleEnhanced:
-    {
-        float adjusted = 0.0f;
+        case ColourScheme::GrayscaleEnhanced:
+        {
+            float adjusted = 0.0f;
 
-        if (value <= 0.8f)
-            adjusted = 0.25f * value;  // y=[0.0, 0.2]
-        else if (value <= 0.9f)
-            adjusted = 0.2f + 1.0f * (value - 0.8f);  // y=[0.2, 0.3]
-        else if (value <= 0.95f)
-            adjusted = 0.3f + 5.0f * (value - 0.9f);  // y=[0.3, 0.55]
-        else
-            adjusted = 0.55f + 9.0f * (value - 0.95f);  // y=[0.55, 1.0]
+            if (value <= 0.8f)
+                adjusted = 0.25f * value;  // y=[0.0, 0.2]
+            else if (value <= 0.9f)
+                adjusted = 0.2f + 1.0f * (value - 0.8f);  // y=[0.2, 0.3]
+            else if (value <= 0.95f)
+                adjusted = 0.3f + 5.0f * (value - 0.9f);  // y=[0.3, 0.55]
+            else
+                adjusted = 0.55f + 9.0f * (value - 0.95f);  // y=[0.55, 1.0]
 
-        // Clip to [0, 1] to avoid rounding issues
-        adjusted = juce::jlimit(0.0f, 1.0f, adjusted);
+            // Clip to [0, 1] to avoid rounding issues
+            adjusted = juce::jlimit(0.0f, 1.0f, adjusted);
 
-        return juce::Colour::fromFloatRGBA(adjusted, adjusted, adjusted, 1.0f);
+            return juce::Colour::fromFloatRGBA(adjusted, adjusted, adjusted, 1.0f);
+        }
+
+        case ColourScheme::Magma:
+        {
+            using ColourMaps::magmaColors;
+            float scaled = value * 9.0f;
+            int idxLow = static_cast<int>(std::floor(scaled));
+            int idxHigh = std::min(idxLow + 1, 9);
+            float t = scaled - idxLow;
+
+            juce::Colour c1 = magmaColors[idxLow];
+            juce::Colour c2 = magmaColors[idxHigh];
+
+            return c1.interpolatedWith(c2, t);
+        }
+
+        case ColourScheme::MagmaEnhanced:
+        {
+            using ColourMaps::magmaColors;
+            float adjusted = 0.0f;
+            if (value <= 0.8f)
+                adjusted = 0.25f * value;  // y=[0.0, 0.2]
+            else if (value <= 0.9f)
+                adjusted = 0.2f + 1.0f * (value - 0.8f);  // y=[0.2, 0.3]
+            else if (value <= 0.95f)
+                adjusted = 0.3f + 5.0f * (value - 0.9f);  // y=[0.3, 0.55]
+            else
+                adjusted = 0.55f + 9.0f * (value - 0.95f);  // y=[0.55, 1.0]
+
+            adjusted = juce::jlimit(0.0f, 1.0f, adjusted);
+
+            // === Magma color lookup ===
+            float scaled = adjusted * 9.0f;
+            int idxLow = static_cast<int>(std::floor(scaled));
+            int idxHigh = std::min(idxLow + 1, 9);
+            float t = scaled - idxLow;
+
+            juce::Colour c1 = magmaColors[idxLow];
+            juce::Colour c2 = magmaColors[idxHigh];
+
+            return c1.interpolatedWith(c2, t);
+        }
+
+        default:
+            return juce::Colours::black;
     }
 
-    case ColourScheme::Magma:
-    {
-        using ColourMaps::magmaColors;
-        float scaled = value * 9.0f;
-        int idxLow = static_cast<int>(std::floor(scaled));
-        int idxHigh = std::min(idxLow + 1, 9);
-        float t = scaled - idxLow;
+}
 
-        juce::Colour c1 = magmaColors[idxLow];
-        juce::Colour c2 = magmaColors[idxHigh];
-
-        return c1.interpolatedWith(c2, t);
-    }
-
-    case ColourScheme::MagmaEnhanced:
-    {
-        using ColourMaps::magmaColors;
-        float adjusted = 0.0f;
-        if (value <= 0.8f)
-            adjusted = 0.25f * value;  // y=[0.0, 0.2]
-        else if (value <= 0.9f)
-            adjusted = 0.2f + 1.0f * (value - 0.8f);  // y=[0.2, 0.3]
-        else if (value <= 0.95f)
-            adjusted = 0.3f + 5.0f * (value - 0.9f);  // y=[0.3, 0.55]
-        else
-            adjusted = 0.55f + 9.0f * (value - 0.95f);  // y=[0.55, 1.0]
-
-        adjusted = juce::jlimit(0.0f, 1.0f, adjusted);
-
-        // === Magma color lookup ===
-        float scaled = adjusted * 9.0f;
-        int idxLow = static_cast<int>(std::floor(scaled));
-        int idxHigh = std::min(idxLow + 1, 9);
-        float t = scaled - idxLow;
-
-        juce::Colour c1 = magmaColors[idxLow];
-        juce::Colour c2 = magmaColors[idxHigh];
-
-        return c1.interpolatedWith(c2, t);
-    }
-
-    default:
-        return juce::Colours::black;
-    }
-
+void SpectrogramComponent::setShowNoteCAxis(bool shouldShow)
+{
+    if (showNoteCAxis == shouldShow) return;
+    showNoteCAxis = shouldShow;
+    repaint();
 }
 
 void SpectrogramComponent::resized()

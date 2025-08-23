@@ -89,12 +89,12 @@ public:
     }
     std::pair<float, float> getFrequencyRangeHz() const { return { minFreqHz, maxFreqHz }; }
 
+    // y note axis
+    void setShowNoteCAxis(bool shouldShow);
+    bool getShowNoteCAxis() const {return showNoteCAxis;}
+
 private:
     juce::Image spectrogramImage;
-
-    // y axis frequency range
-    float minFreqHz = 30.0f;
-    float maxFreqHz = 22050.0f;
 
     // FFT state
     int fftOrder = 11;  // default 2^11 = 2048
@@ -141,6 +141,21 @@ private:
     void timerCallback() override;
     void drawNextLineOfSpectrogram();
 
+    // paint y axis (frequency)
+    void paintMelYAxis(juce::Graphics& g, const int width, const int imageHeight);
+    void paintMFCCYAxis(juce::Graphics& g, const int width, const int imageHeight);
+    void paintChromaYAxis(juce::Graphics& g, const int width, const int imageHeight);
+    void paintSTFTYAxis(juce::Graphics& g, const int width, const int imageHeight);
+    // y axis frequency range
+    float minFreqHz = 30.0f;
+    float maxFreqHz = 22050.0f;
+    // paint y axis (note)
+    void paintNoteYAxis(juce::Graphics& g, const bool modeSupportsNoteAxis);
+    // y note axis
+    bool showNoteCAxis = false;
+    int hzToY(float hz) const;
+
+    // draw spectrogram
     void drawLinearSpectrogram(int x, std::vector<float>& dBColumn, const int imageHeight, const float maxFreq);
     void drawMelSpectrogram(int x, std::vector<float>& dBColumn, const int imageHeight);
     void drawMFCC(int x, std::vector<float>& dBColumn, const int imageHeight);
@@ -158,9 +173,17 @@ private:
     void mouseMove(const juce::MouseEvent& event) override;
     void mouseExit(const juce::MouseEvent& event) override;
 
+    juce::String drawMelTooltip(float dB, const int imgY, float freq);
+    juce::String drawMFCCTooltip(float dB, const int imgY, const int imageHeight);
+    juce::String drawChromaTooltip(const int dBIndex, const int imgY, const int imageHeight);
+    juce::String drawSTFTTooltip(float dB, const int imgY, float freq);
+
     std::vector<float> melBandFrequencies;
 
     // Mel scale:
+    // Slaney-style Mel: mel = 2595 * log10(1 + f / 700)
+    static float hzToMel(float hz) { return 2595.0f * std::log10(1.0f + hz / 700.0f); }
+    static float melToHz(float mel) { return 700.0f * (std::pow(10.0f, mel / 2595.0f) - 1.0f); }
     // Number of Mel filterbanks used to approximate the auditory scale.
     const int melBands = 128;
     // MFCC:
