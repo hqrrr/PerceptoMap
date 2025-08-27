@@ -363,3 +363,7 @@ If you use **PerceptoMap** in academic work, please cite a tagged release.
 > *Replace **version** (incl. release **date**) with the exact version you used.*
 
 [Back to top ↥](#perceptomap)
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=hqrrr/PerceptoMap&type=Date)](https://www.star-history.com/#hqrrr/PerceptoMap&Date)
