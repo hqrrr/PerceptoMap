@@ -152,7 +152,8 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
         "- Mel+: Mel-scaled spectrogram after time-frequency reassignment.\n"
         "- MFCC: Mel-frequency cepstral coefficient, representing timbral texture. Typically used in audio classification and speech recognition.\n"
         "- Spectral Centroid: STFT spectrogram with added curves showing where the energy is centered and how widely it is spread across frequencies.\n"
-        "- Chroma: Chromagram showing the energy distribution across the 12 pitch classes (C to B), regardless of octave. Useful for analyzing harmonic content and key."
+        "- Chroma: Chromagram showing the energy distribution across the 12 pitch classes (C to B), regardless of octave. Useful for analyzing harmonic content and key.\n"
+        "- Fourier Tempogram: Tempo (BPM) energy vs. time computed from the onset envelope via STFT, overlays a dynamic tempo line (peak per frame with log-normal prior). Tip: Use a higher FFT size like 4096.\n"
     );
     spectrogramModeBox.addItem("Linear", static_cast<int>(SpectrogramComponent::SpectrogramMode::Linear));
     spectrogramModeBox.addItem("Linear+", static_cast<int>(SpectrogramComponent::SpectrogramMode::LinearPlus));
@@ -161,6 +162,7 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
     spectrogramModeBox.addItem("MFCC", static_cast<int>(SpectrogramComponent::SpectrogramMode::MFCC));
     spectrogramModeBox.addItem("Spectral Centroid", static_cast<int>(SpectrogramComponent::SpectrogramMode::LinearWithCentroid));
     spectrogramModeBox.addItem("Chroma", static_cast<int>(SpectrogramComponent::SpectrogramMode::Chroma));
+    spectrogramModeBox.addItem("Fourier Tempogram", static_cast<int>(SpectrogramComponent::SpectrogramMode::FourierTempogram));
 
     spectrogramModeBox.setSelectedId(static_cast<int>(SpectrogramComponent::SpectrogramMode::Linear));  // default: linear
 
@@ -210,7 +212,7 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
         "Set brightness scale factor (norm factor) for spectrogram display.\n"
         "Useful for adjusting overall dB level display."
     );
-    normFactorSlider.setRange(0.001, 5.0, 0.001); // allow finer range
+    normFactorSlider.setRange(0.001, 10.0, 0.001); // allow finer range
     normFactorSlider.setSkewFactorFromMidPoint(1.0); // nonlinear feel
     normFactorSlider.setValue(1.0);  // default
     normFactorSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 60, 20);
@@ -423,6 +425,21 @@ void SpectrogramAudioProcessorEditor::MenuDisableControl(SpectrogramComponent::S
             yMaxHzEdit.setEnabled(false);
             floorDbSlider.setEnabled(false);
             noteAxisToggle.setEnabled(false);
+            break;
+        }
+        // Fourier Tempogram
+        case SpectrogramComponent::SpectrogramMode::FourierTempogram:
+        {
+            logScaleBox.setEnabled(false);
+            yRangeSlider.setEnabled(false);
+            yMinHzEdit.setEnabled(false);
+            yMaxHzEdit.setEnabled(false);
+            floorDbSlider.setEnabled(true);
+            noteAxisToggle.setEnabled(false);
+            // auto switch FFT size to >=4096 for better tempogram results
+            const int curOrder = fftSizeBox.getSelectedId();
+            if (curOrder < 12)  // 2^12=4096
+                fftSizeBox.setSelectedId(12, juce::sendNotificationSync);
             break;
         }
         // Linear STFT

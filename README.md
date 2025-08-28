@@ -11,7 +11,7 @@
 
 PerceptoMap is an open-source audio plugin (VST3) that visualizes psychoacoustic features of audio signals in real time. Built with [JUCE](https://juce.com/), it's designed to help you **see** how we **perceive** sound — not just how it looks on a frequency plot.
 
-Unlike typical spectrum or spectrogram analyzers, it supports perceptual visualizations such as **Mel spectrograms**, **Mel-frequency cepstral coefficients (MFCCs)**, **Chromagram**, and soon also **Tempogram** etc., offering insight into how humans perceive sound.
+Unlike typical spectrum or spectrogram analyzers, it supports perceptual visualizations such as **Mel spectrograms**, **Mel-frequency cepstral coefficients (MFCCs)**, **Chromagram**, and **Tempogram** etc., offering insight into how humans perceive sound.
 
 > 🎧 If you're the kind of creator who trusts your ears above all — you might not need this.  
 > But if you're curious about how your audio *measures up* to what humans actually hear… welcome aboard.
@@ -38,7 +38,8 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
 - Real-time **Chromagram** showing the energy distribution across the 12 pitch classes (C to B), regardless of octave. <span style="color: gray;">[added in v0.5]</span>
 - **Time-Frequency Reassignment** mode (Linear+) for enhanced STFT resolution, based on the paper [[hal-00414583: Time-Frequency reassignment: from principles to algorithms](https://hal.science/hal-00414583/document)]. This mode sharpens the localization of spectral peaks by reassigning energy to more accurate time-frequency coordinates, making harmonic structures and transient details clearer compared to the standard STFT. <span style="color: gray;">[added in v0.6]</span>
 - **Time-Frequency Reassigned Mel Spectrogram** mode (Mel+) - Mel-scaled display using the same time-frequency reassignment principle as Linear+. It computes the reassigned frequency from the complex STFT and then projects energy onto the Mel axis, yielding sharper harmonic ridges and crisper transients than a standard Mel spectrogram. <span style="color: gray;">[added in v0.7]</span>
-- Visual analysis of **Tempogram** and other psychoacoustic features *(planned)* 
+- Real-time **Fourier Tempogram (with Tempo Line)** - Rhythm/tempo map in the BPM (frequency) domain with a dynamic tempo track, based on [[10.1109/ICASSP.2010.5495219](https://doi.org/10.1109/ICASSP.2010.5495219)]. <span style="color: gray;">[added in v0.10]</span>
+- Visual analysis of **Autocorrelation Tempogram** and other psychoacoustic features *(planned)* 
 - Configurable color maps
 - Adjustable brightness gain and enhanced colormap modes to improve visibility of fine details in the spectrogram <span style="color: gray;">[added in v0.4]</span>
 - Optional dB scaling, log or linear frequency axis for classic linear STFT spectrogram
@@ -202,6 +203,27 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
   </tr>
 </table>
 
+<table style="table-layout: fixed; width: 100%;">
+  <tr>
+    <td align="center" valign="top">
+      <img src="_pics/gui_fourier_tempogram.png" width="100%" alt="Mel-frequency cepstral coefficient" />
+      <br/>
+      <sub>
+        <strong>Fourier Tempogram:</strong>
+        <i>
+          Rhythm/tempo map showing BPM energy over time, with dynamic tempo track. <span style="color: gray;">[added in v0.10]</span>
+        </i>
+      </sub>
+    </td>
+    <td align="center" valign="top">
+      <img src="_pics/blank_800x630.png" width="100%" alt="blank" />
+    </td>
+    <td align="center" valign="top">
+      <img src="_pics/blank_800x630.png" width="100%" alt="blank" />
+    </td>
+  </tr>
+</table>
+
 [Back to top ↥](#perceptomap)
 
 ## Roadmap
@@ -217,7 +239,8 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
 | Enhanced STFT with Time–Frequency Reassignment (Linear+) | ✅ Done (v0.6) | Sharper time–frequency localization by reassigning each STFT bin’s energy to more accurate time/frequency coordinates | Based on [[hal-00414583: Time-Frequency reassignment: from principles to algorithms](https://hal.science/hal-00414583/document)], implemented with Gaussian-window STFT and its time & frequency derivatives. Instantaneous frequency and group delay estimates are used to re-map spectral energy, improving localization of transients and harmonics compared to standard STFT. Supports same FFT size and log/linear axis options as Linear mode |
 | Enhanced Mel Spectrogram with Time–Frequency Reassignment (Mel+) | ✅ Done (v0.7) | Mel-scaled spectrogram with sharper harmonic ridges and crisper transients by reassigning each STFT bins energy to its true instantaneous frequency, then projecting onto the Mel axis | Based on the same reassignment principle as Linear+. Mapped to Mel. |
 | Y-axis Range Control | ✅ Done (v0.8) | Precise control over visible frequency band | Dual-handle range slider + editable min/max fields |
-| Tempogram / Rhythm Map | ⏳ Planned | Visualizes perceived tempo and rhythmic periodicities over time | - |
+| Fourier Tempogram | ✅ Done (v0.10) | Rhythm/tempo map showing BPM energy over time, with dynamic tempo track (Tempo Line), sharper separation of nearby tempo | Based on [[10.1109/ICASSP.2010.5495219](https://doi.org/10.1109/ICASSP.2010.5495219)]. Positive spectral flux on log-compressed STFT; STFT of the novelty with a Hann window of length `wantWinSec` seconds (default: 8s); BPM axis sampled on a log scale. Per-frame prior-weighted peak picking (log-normal prior) overlays a continuous tempo line.<br/> **Note:** the tempogram and tempo line update with a delay = `wantWinSec` (window accumulation). On entering this mode the FFT size will be auto-bumped to >= 4096 for a more stable onset envelope. |
+| Autocorrelation Tempogram | ⏳ Planned | Time-lag periodicity map (tempo strength over time, mapped to BPM) with dynamic Tempo Line, naturally highlights double/half-time relationships | - |
 | Spectral Flatness / Contrast | ⏳ Planned | Measures of timbral characteristics | - |
 
 [Back to top ↥](#perceptomap)

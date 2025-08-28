@@ -36,8 +36,9 @@ public:
         LinearWithCentroid,
         Chroma,
         LinearPlus,
-        MelPlus
-        // TODO: add Tempogram, Rhythm, etc.
+        MelPlus,
+        FourierTempogram
+        // TODO: add Autocorrelation Tempogram, Rhythm, etc.
     };
 
     SpectrogramComponent();
@@ -154,6 +155,8 @@ private:
     // y note axis
     bool showNoteCAxis = false;
     int hzToY(float hz) const;
+    // paint y axis (tempo)
+    void paintTempoYAxis(juce::Graphics& g, int width, int imageHeight);
 
     // draw spectrogram
     void drawLinearSpectrogram(int x, std::vector<float>& dBColumn, const int imageHeight, const float maxFreq);
@@ -163,6 +166,8 @@ private:
     void drawChroma(int x, std::vector<float>& dBColumn, const int imageHeight);
     void drawReassignedSpectrogram(int x, std::vector<float>& dBColumn, const int imageHeight, const float maxFreq);
     void drawReassignedMelSpectrogram(int x, std::vector<float>& dBColumn, int imageHeight);
+    // draw Fourier Tempogram
+    void drawFourierTempogram(int x, std::vector<float>& dBColumn, int imageHeight);
 
     SpectrogramMode currentMode = SpectrogramMode::Linear;
 
@@ -177,6 +182,7 @@ private:
     juce::String drawMFCCTooltip(float dB, const int imgY, const int imageHeight);
     juce::String drawChromaTooltip(const int dBIndex, const int imgY, const int imageHeight);
     juce::String drawSTFTTooltip(float dB, const int imgY, float freq);
+    juce::String drawTempogramTooltip(float dB, const int imgY, const int imageHeight);
 
     std::vector<float> melBandFrequencies;
 
@@ -219,6 +225,41 @@ private:
     const float thresholdFactor = 0.05f;
     // Gaussian window width
     const float sigmaCoef = 0.3f;
+
+    // Tempogram
+    // Fourier Tempogram
+    float tempoMinBPM = 30.0f;  // min BPM
+    float tempoMaxBPM = 480.0f; // max BPM
+    int   tempoBins = 200;       // tempo resolution
+    // Time window of tempogram:
+    // The longer the time, the sharper and clearer the peak becomes,
+    // but the image response slows down.
+    const double wantWinSec = 8.0; // s
+    // novelty (spectral flux) buffer
+    std::vector<float> noveltyRing;
+    size_t noveltyWrite = 0;
+    int    noveltyRingSize = 0;
+    // novelty window
+    int   noveltyWinLen = 0;
+    std::vector<float> noveltyWin;
+    // Amplitude spectrum of the previous frame for spectral flux calculation
+    std::vector<float> lastMagSpec;
+    bool haveLastMag = false;
+    std::vector<float> lastCompSpec;    // after compression
+    // Sample duration (seconds/novelty)
+    double noveltySamplePeriod = 0.0;
+    // activity gate threshold
+    const float activityThresh = 1e-3f;
+    // init helper
+    void initFourierTempogram();
+    // Tempo line (Fourier) overlay
+    bool showFourierTempoLine = true;
+    float tempoPriorStartBPM = 120.0f;
+    float tempoPriorSigmaLog2 = 0.5f;
+    int lastFourierTempoY = -1;
+    float bpmToImageY(float bpm, int imageHeight) const;
+    float fourierTempoPrior(float bpm) const;
+    
 };
 
 // color schemes
