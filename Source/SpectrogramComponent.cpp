@@ -992,49 +992,68 @@ void SpectrogramComponent::drawFourierTempogram(int x, std::vector<float>& dBCol
         fourierTempoLineColour = juce::Colour::fromRGB(255, 255, 255);   // white
         break;
     }
-    if (showFourierTempoLine && M >= 2)
+
+    int   mPeak = 0;
+    float bestVal = -1.0e30f;
+    float bestBPM = tempoBPM[0];
+
+    for (int m = 0; m < M; ++m)
     {
-        int   mPeak = 0;
-        float bestVal = -1.0e30f;
-        float bestBPM = tempoBPM[0];
-
-        for (int m = 0; m < M; ++m)
+        const float bpm = tempoBPM[m];
+        const float prior = fourierTempoPrior(bpm);
+        const float score = mag[m] * prior;
+        if (score > bestVal)
         {
-            const float bpm = tempoBPM[m];
-            const float prior = fourierTempoPrior(bpm);
-            const float score = mag[m] * prior;
-            if (score > bestVal)
-            {
-                bestVal = score;
-                mPeak = m;
-                bestBPM = bpm;
-            }
+            bestVal = score;
+            mPeak = m;
+            bestBPM = bpm;
         }
+    }
 
-        const int yTempo = (int)std::round(bpmToImageY(bestBPM, imageHeight));
-        if (yTempo >= 0 && yTempo < imageHeight)
+    const int yTempo = (int)std::round(bpmToImageY(bestBPM, imageHeight));
+    if (yTempo >= 0 && yTempo < imageHeight)
+    {
+        // draw on tempogram
+        juce::Graphics imgG(spectrogramImage);
+        imgG.setColour(fourierTempoLineColour.withAlpha(0.95f));
+
+        if (lastFourierTempoY >= 0)
         {
-            // draw on tempogram
-            juce::Graphics imgG(spectrogramImage);
-            imgG.setColour(fourierTempoLineColour.withAlpha(0.95f));
-
-            if (lastFourierTempoY >= 0)
-            {
-                imgG.drawLine((float)(x - 1), (float)lastFourierTempoY,
-                    (float)x, (float)yTempo,
-                    2.0f); // line width
-            }
-            else
-            {
-                // draw first point
-                imgG.fillRect(x, yTempo, 1, 1);
-            }
-            lastFourierTempoY = yTempo;
+            imgG.drawLine((float)(x - 1), (float)lastFourierTempoY,
+                (float)x, (float)yTempo,
+                2.0f); // line width
         }
         else
         {
-            lastFourierTempoY = -1;
+            // draw first point
+            imgG.fillRect(x, yTempo, 1, 1);
         }
+        lastFourierTempoY = yTempo;
+    }
+    else
+    {
+        lastFourierTempoY = -1;
+    }
+    
+    // BPM tempo statistics
+    if (bestBPM > 0.0f && std::isfinite(bestBPM))
+    {
+        // avg
+        tempoAvgSum += bestBPM;
+        tempoAvgCount += 1;
+        globalTempoBPM = (float)(tempoAvgSum / std::max(1, tempoAvgCount));
+
+        // min/max
+        tempoMin = std::min(tempoMin, bestBPM);
+        tempoMax = std::max(tempoMax, bestBPM);
+
+        // median
+        tempoHistory.push_back(bestBPM);
+        std::vector<float> tmp = tempoHistory;
+        std::sort(tmp.begin(), tmp.end());
+        const size_t n = tmp.size();
+        tempoMedian = (n % 2) ? tmp[n / 2]
+            : 0.5f * (tmp[n / 2 - 1] + tmp[n / 2]);
     }
 }
 
@@ -1346,11 +1365,24 @@ void SpectrogramComponent::paintTempoYAxis(juce::Graphics& g, int width, int ima
         g.drawFittedText(label, textArea, juce::Justification::left, 1);
     }
 
-    // Title "BPM"
+    // BPM tempo statistics
+    const int statsW = 140;
+    const int statsH = 60;
+    const int rightPad = 70;
+    const int topY = 52;
+    // background
+    juce::Rectangle<int> statsRect(getWidth() - rightPad, topY, statsW, statsH);
+    auto bg = statsRect.expanded(4);
+    g.setColour(juce::Colours::black.withAlpha(0.5f));
+    g.fillRoundedRectangle(bg.toFloat(), 6.0f);
+    // text
     g.setColour(juce::Colours::lightgrey);
     g.setFont(juce::Font(11.0f, juce::Font::italic));
-    juce::String title = "BPM";
-    g.drawFittedText(title, { x0 + 4, 2, width - 8, 16 }, juce::Justification::centredLeft, 1);
+    juce::String title = "BPM\nAVG: " + juce::String(globalTempoBPM, 1) + 
+        "\nMed: " + juce::String(tempoMedian, 1) +
+        "\nMax: " + juce::String(tempoMax, 1) +
+        "\nMin: " + juce::String(tempoMin, 1);
+    g.drawFittedText(title, statsRect, juce::Justification::left, 5);
 }
 
 juce::String SpectrogramComponent::drawMelTooltip(float dB, const int imgY, float freq)
@@ -1738,6 +1770,8 @@ void SpectrogramComponent::initFourierTempogram()
         haveLastMag = false;
     }
     lastFourierTempoY = -1;
+    // reset tempo statistics
+    resetTempoStats();
 }
 
 float SpectrogramComponent::fourierTempoPrior(float bpm) const
@@ -1747,6 +1781,17 @@ float SpectrogramComponent::fourierTempoPrior(float bpm) const
     const float sigma = juce::jmax(1e-3f, tempoPriorSigmaLog2);
     const float z = std::log2(juce::jmax(1e-6f, bpm / mu)) / sigma;
     return std::exp(-0.5f * z * z);
+}
+
+void SpectrogramComponent::resetTempoStats()
+{
+    tempoHistory.clear();
+    tempoAvgSum = 0.0;
+    tempoAvgCount = 0;
+    globalTempoBPM = 0.0f;
+    tempoMin = std::numeric_limits<float>::infinity();
+    tempoMax = 0.0f;
+    tempoMedian = 0.0f;
 }
 
 juce::Colour SpectrogramComponent::getColourForValue(float value)

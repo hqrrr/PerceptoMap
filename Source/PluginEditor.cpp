@@ -387,6 +387,21 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
         spectrogram.setShowNoteCAxis(noteAxisToggle.getToggleState());
         repaint();
     };
+
+    // reset tempo avg button in Tempogram
+    addAndMakeVisible(tempoAvgResetBtn);
+    tempoAvgResetBtn.setTooltip("Reset average BPM");
+    tempoAvgResetBtn.setWantsKeyboardFocus(false);
+    tempoAvgResetBtn.onClick = [this] 
+    {
+        spectrogram.resetTempoStats();
+        //repaint();
+    };
+    tempoAvgResetBtn.setColour(juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
+    tempoAvgResetBtn.setColour(juce::TextButton::textColourOnId, juce::Colours::lightgrey);
+    tempoAvgResetBtn.setColour(juce::TextButton::textColourOffId, juce::Colours::lightgrey);
+    tempoAvgResetBtn.setVisible(false);
+
 }
 
 void SpectrogramAudioProcessorEditor::MenuDisableControl(SpectrogramComponent::SpectrogramMode mode)
@@ -403,6 +418,7 @@ void SpectrogramAudioProcessorEditor::MenuDisableControl(SpectrogramComponent::S
             yMaxHzEdit.setEnabled(true);
             floorDbSlider.setEnabled(true);
             noteAxisToggle.setEnabled(true);
+            tempoAvgResetBtn.setVisible(false);
             break;
         }
         // MFCC
@@ -414,6 +430,7 @@ void SpectrogramAudioProcessorEditor::MenuDisableControl(SpectrogramComponent::S
             yMaxHzEdit.setEnabled(false);
             floorDbSlider.setEnabled(false);
             noteAxisToggle.setEnabled(false);
+            tempoAvgResetBtn.setVisible(false);
             break;
         }
         // Chroma
@@ -425,6 +442,7 @@ void SpectrogramAudioProcessorEditor::MenuDisableControl(SpectrogramComponent::S
             yMaxHzEdit.setEnabled(false);
             floorDbSlider.setEnabled(false);
             noteAxisToggle.setEnabled(false);
+            tempoAvgResetBtn.setVisible(false);
             break;
         }
         // Fourier Tempogram
@@ -436,6 +454,7 @@ void SpectrogramAudioProcessorEditor::MenuDisableControl(SpectrogramComponent::S
             yMaxHzEdit.setEnabled(false);
             floorDbSlider.setEnabled(true);
             noteAxisToggle.setEnabled(false);
+            tempoAvgResetBtn.setVisible(true);
             // auto switch FFT size to >=4096 for better tempogram results
             const int curOrder = fftSizeBox.getSelectedId();
             if (curOrder < 12)  // 2^12=4096
@@ -450,6 +469,7 @@ void SpectrogramAudioProcessorEditor::MenuDisableControl(SpectrogramComponent::S
             yMaxHzEdit.setEnabled(true);
             floorDbSlider.setEnabled(true);
             noteAxisToggle.setEnabled(true);
+            tempoAvgResetBtn.setVisible(false);
             break;
     }
 }
@@ -625,4 +645,10 @@ void SpectrogramAudioProcessorEditor::resized()
 
     // rest: spectrogram
     spectrogram.setBounds(area);
+
+    // reset tempo avg button in Tempogram
+    auto spec = spectrogram.getBounds();
+    const int resTempoBtnHeight = 18;
+    const int resTempoBtnWidth = 48;
+    tempoAvgResetBtn.setBounds(spec.getRight() - 70, spec.getY() + 28, resTempoBtnWidth, resTempoBtnHeight);
 }

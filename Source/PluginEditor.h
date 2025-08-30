@@ -101,6 +101,9 @@ private:
     // y axis (note)
     juce::ToggleButton noteAxisToggle;
 
+    // reset tempo avg button in Tempogram
+    juce::TextButton tempoAvgResetBtn{"Reset"};
+
     // row labels
     float labelAlpha = 0.8f;
     juce::Label row1stLabel;

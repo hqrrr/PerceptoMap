@@ -94,6 +94,9 @@ public:
     void setShowNoteCAxis(bool shouldShow);
     bool getShowNoteCAxis() const {return showNoteCAxis;}
 
+    // Tempo statistics
+    void resetTempoStats();
+
 private:
     juce::Image spectrogramImage;
 
@@ -253,12 +256,19 @@ private:
     // init helper
     void initFourierTempogram();
     // Tempo line (Fourier) overlay
-    bool showFourierTempoLine = true;
     float tempoPriorStartBPM = 120.0f;
     float tempoPriorSigmaLog2 = 0.5f;
     int lastFourierTempoY = -1;
     float bpmToImageY(float bpm, int imageHeight) const;
     float fourierTempoPrior(float bpm) const;
+    // Tempo statistics
+    std::vector<float> tempoHistory;
+    double tempoAvgSum = 0.0;
+    int tempoAvgCount = 0;
+    float globalTempoBPM = 0.0f;
+    float tempoMin = std::numeric_limits<float>::infinity();
+    float tempoMax = 0.0f;
+    float tempoMedian = 0.0f;
     
 };
 
