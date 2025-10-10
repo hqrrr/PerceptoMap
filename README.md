@@ -216,7 +216,14 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
       </sub>
     </td>
     <td align="center" valign="top">
-      <img src="_pics/blank_800x630.png" width="100%" alt="blank" />
+      <img src="_pics/gui_autocorrelation_tempogram.png" width="100%" alt="blank" />
+      <br/>
+      <sub>
+        <strong>Autocorrelation Tempogram:</strong>
+        <i>
+          Rhythm/tempo map from windowed autocorrelation of the onset/novelty signal, robust to phase; includes a dynamic tempo track <span style="color: gray;">[added in v0.12]</span>
+        </i>
+      </sub>
     </td>
     <td align="center" valign="top">
       <img src="_pics/blank_800x630.png" width="100%" alt="blank" />
@@ -240,7 +247,7 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
 | Enhanced Mel Spectrogram with Time–Frequency Reassignment (Mel+) | ✅ Done (v0.7) | Mel-scaled spectrogram with sharper harmonic ridges and crisper transients by reassigning each STFT bins energy to its true instantaneous frequency, then projecting onto the Mel axis | Based on the same reassignment principle as Linear+. Mapped to Mel. |
 | Y-axis Range Control | ✅ Done (v0.8) | Precise control over visible frequency band | Dual-handle range slider + editable min/max fields |
 | Fourier Tempogram | ✅ Done (v0.10) | Rhythm/tempo map showing BPM energy over time, with dynamic tempo track (Tempo Line), sharper separation of nearby tempo | Based on [[10.1109/ICASSP.2010.5495219](https://doi.org/10.1109/ICASSP.2010.5495219)]. Positive spectral flux on log-compressed STFT; STFT of the novelty with a Hann window of length `wantWinSec` seconds (default: 8s); BPM axis sampled on a log scale. Per-frame prior-weighted peak picking (log-normal prior) overlays a continuous tempo line.<br/> **Note:** the tempogram and tempo line update with a delay = `wantWinSec` (window accumulation). On entering this mode the FFT size will be auto-bumped to >= 4096 for a more stable onset envelope. |
-| Autocorrelation Tempogram | ⏳ Planned | Time-lag periodicity map (tempo strength over time, mapped to BPM) with dynamic Tempo Line, naturally highlights double/half-time relationships | - |
+| Autocorrelation Tempogram | ✅ Done (v0.12) | Time-lag periodicity map (tempo strength over time, mapped to BPM) with dynamic Tempo Line, robust to local phase, naturally highlights double/half-time relationships | Similar to the Fourier Tempogram, but computed via windowed autocorrelation of the onset/novelty signal. The AutoCorrelation Function (ACF) is normalized by the zero-lag term; the BPM axis is log-spaced, and a per-frame log-normal prior guides peak picking to draw the Tempo Line. Note: entering this mode auto-sets FFT size to 2048 for improved temporal resolution. |
 | Spectral Flatness / Contrast | ⏳ Planned | Measures of timbral characteristics | - |
 
 [Back to top ↥](#perceptomap)

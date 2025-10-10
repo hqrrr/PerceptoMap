@@ -222,9 +222,10 @@ void SpectrogramComponent::pushNextFFTBlock(const float* data, size_t numSamples
 
             forwardFFT.performFrequencyOnlyForwardTransform(fftData.data());
 
-            // Fourier tempogram
+            // Fourier tempogram / Autocorrelation tempogram
             // compute spectral flux novelty and push into novelty ring buffer
-            if (currentMode == SpectrogramMode::FourierTempogram)
+            if (currentMode == SpectrogramMode::FourierTempogram 
+                || currentMode == SpectrogramMode::AutoTempogram)
             {
                 // current magnitude spectrum in [0 ... fftSize/2)
                 const int nBins = fftSize / 2;
@@ -1057,6 +1058,156 @@ void SpectrogramComponent::drawFourierTempogram(int x, std::vector<float>& dBCol
     }
 }
 
+void SpectrogramComponent::drawAutoTempogram(int x, std::vector<float>& dBColumn, int imageHeight)
+{
+    if (noveltyRing.empty() || noveltyWinLen <= 2 || imageHeight <= 0)
+        return;
+
+    // novelty (consistent with Fourier Tempogram)
+    std::vector<float> seg(noveltyWinLen, 0.0f);
+    for (int i = 0; i < noveltyWinLen; ++i)
+    {
+        int idx = (int)noveltyWrite - 1 - i;
+        if (idx < 0) idx += (int)noveltyRing.size();
+        seg[noveltyWinLen - 1 - i] = noveltyRing[(size_t)idx];
+    }
+
+    float mu = 0.0f;
+    for (float v : seg) mu += v;
+    mu /= (float)noveltyWinLen;
+
+    float activity = 0.0f;
+    for (int i = 0; i < noveltyWinLen; ++i)
+    {
+        seg[i] = std::max(0.0f, seg[i] - mu);
+        activity += seg[i];
+    }
+    if (activity < activityThresh)
+    {
+        for (int y = 0; y < imageHeight; ++y)
+        {
+            dBColumn[y] = floorDb;
+            spectrogramImage.setPixelAt(x, y, getColourForValue(0.0f));
+        }
+        lastFourierTempoY = -1;
+        return;
+    }
+
+    // Calculate windowed autocorrelation
+    // ACF on seg * window, then normalize / acf[0]
+    const double winSum = std::accumulate(noveltyWin.begin(), noveltyWin.end(), 0.0);
+    const double normW = (winSum > 1e-12) ? (1.0 / winSum) : 1.0;
+
+    std::vector<float> wseg(noveltyWinLen);
+    for (int i = 0; i < noveltyWinLen; ++i)
+        wseg[i] = seg[i] * noveltyWin[i] * (float)normW;
+
+    // Precompute 0-lag energy for normalization
+    double acf0 = 0.0;
+    for (int i = 0; i < noveltyWinLen; ++i) acf0 += (double)wseg[i] * (double)wseg[i];
+    if (acf0 < 1e-12) acf0 = 1e-12;
+
+    // Divide the "BPM axis (logarithmically uniform)" into M discrete points and 
+    // calculate the corresponding lag for each BPM (rounding down).
+    const int M = juce::jmax(8, tempoBins);
+    std::vector<float> tempoBPM(M), mag(M, 0.0f);
+
+    const double logMin = std::log10(juce::jmax(1.0f, tempoMinBPM));
+    const double logMax = std::log10(juce::jmax(tempoMinBPM + 1.0f, tempoMaxBPM));
+    for (int m = 0; m < M; ++m)
+    {
+        double alpha = (double)m / (double)(M - 1);
+        double bpm = std::pow(10.0, logMin + alpha * (logMax - logMin));
+        tempoBPM[m] = (float)bpm;
+
+        double periodSec = 60.0 / juce::jmax(1e-9, bpm);
+        int lag = (int)std::round(periodSec / juce::jmax(1e-12, noveltySamplePeriod));
+
+        // Only retain reasonable lag
+        if (lag >= 1 && lag < noveltyWinLen)
+        {
+            double s = 0.0;
+            // sum_t wseg[t] * wseg[t-lag]
+            for (int t = lag; t < noveltyWinLen; ++t)
+                s += (double)wseg[t] * (double)wseg[t - lag];
+
+            float val = (float)(s / acf0);
+            mag[m] = juce::jlimit(0.0f, 1.0f, val);
+        }
+    }
+
+    // Mapped to the image column
+    for (int y = 0; y < imageHeight; ++y)
+    {
+        float frac = 1.0f - ((float)y / (float)(imageHeight - 1));
+        int   m = juce::jlimit(0, M - 1, (int)std::round(frac * (M - 1)));
+
+        float v = mag[m] * normFactor;
+        float dB = 20.0f * std::log10(v + 1e-9f);
+        float dbC = juce::jlimit(floorDb, 0.0f, dB);
+        dBColumn[y] = dbC;
+
+        float bright = juce::jmap(dbC, floorDb, 0.0f, 0.0f, 1.0f);
+        spectrogramImage.setPixelAt(x, y, getColourForValue(bright));
+    }
+
+    // Overlay tempo curve (using the same logarithmic prior as Fourier to suppress frequency ambiguity)
+    juce::Colour tempoLineColour;
+    switch (colourScheme)
+    {
+    case ColourScheme::Grayscale:
+    case ColourScheme::GrayscaleEnhanced: tempoLineColour = juce::Colour::fromRGB(0, 200, 255); break;
+    case ColourScheme::Magma:
+    case ColourScheme::MagmaEnhanced:     tempoLineColour = juce::Colour::fromRGB(0, 255, 128); break;
+    default:                               tempoLineColour = juce::Colour::fromRGB(255, 255, 255); break;
+    }
+
+    int   mPeak = 0;
+    float bestVal = -1.0e30f;
+    float bestBPM = tempoBPM[0];
+    for (int m = 0; m < M; ++m)
+    {
+        const float bpm = tempoBPM[m];
+        const float score = mag[m] * fourierTempoPrior(bpm);
+        if (score > bestVal) { bestVal = score; mPeak = m; bestBPM = bpm; }
+    }
+
+    const int yTempo = (int)std::round(bpmToImageY(bestBPM, imageHeight));
+    if (yTempo >= 0 && yTempo < imageHeight)
+    {
+        juce::Graphics imgG(spectrogramImage);
+        imgG.setColour(tempoLineColour.withAlpha(0.95f));
+
+        if (lastFourierTempoY >= 0)
+            imgG.drawLine((float)(x - 1), (float)lastFourierTempoY, (float)x, (float)yTempo, 2.0f);
+        else
+            for (int dy = -1; dy <= 1; ++dy)
+                spectrogramImage.setPixelAt(x, juce::jlimit(0, imageHeight - 1, yTempo + dy), tempoLineColour);
+        lastFourierTempoY = yTempo;
+    }
+
+    // BPM tempo statistics
+    if (bestBPM > 0.0f && std::isfinite(bestBPM))
+    {
+        // avg
+        tempoAvgSum += bestBPM;
+        tempoAvgCount += 1;
+        globalTempoBPM = (float)(tempoAvgSum / std::max(1, tempoAvgCount));
+
+        // min/max
+        tempoMin = std::min(tempoMin, bestBPM);
+        tempoMax = std::max(tempoMax, bestBPM);
+
+        // median
+        tempoHistory.push_back(bestBPM);
+        std::vector<float> tmp = tempoHistory;
+        std::sort(tmp.begin(), tmp.end());
+        const size_t n = tmp.size();
+        tempoMedian = (n % 2) ? tmp[n / 2]
+            : 0.5f * (tmp[n / 2 - 1] + tmp[n / 2]);
+    }
+}
+
 void SpectrogramComponent::drawNextLineOfSpectrogram()
 {
     const int imageWidth = spectrogramImage.getWidth();
@@ -1104,6 +1255,10 @@ void SpectrogramComponent::drawNextLineOfSpectrogram()
         case SpectrogramMode::FourierTempogram:
             drawFourierTempogram(x, dBColumn, imageHeight);
             break;
+        case SpectrogramMode::AutoTempogram:
+            drawAutoTempogram(x, dBColumn, imageHeight);
+            break;
+
         default:
             drawLinearSpectrogram(x, dBColumn, imageHeight, maxFreq);
             break;
@@ -1564,6 +1719,9 @@ void SpectrogramComponent::paint(juce::Graphics& g)
         case SpectrogramMode::FourierTempogram:
             paintTempoYAxis(g, width, imageHeight);
             break;
+        case SpectrogramMode::AutoTempogram:
+            paintTempoYAxis(g, width, imageHeight);
+            break;
     
         default:
             paintSTFTYAxis(g, width, imageHeight);
@@ -1660,6 +1818,9 @@ void SpectrogramComponent::paint(juce::Graphics& g)
                 labelText = drawSTFTTooltip(dB, imgY, freq);
                 break;
             case SpectrogramMode::FourierTempogram:
+                labelText = drawTempogramTooltip(dB, imgY, imageHeight);
+                break;
+            case SpectrogramMode::AutoTempogram:
                 labelText = drawTempogramTooltip(dB, imgY, imageHeight);
                 break;
 

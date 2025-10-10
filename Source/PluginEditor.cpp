@@ -154,6 +154,7 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
         "- Spectral Centroid: STFT spectrogram with added curves showing where the energy is centered and how widely it is spread across frequencies.\n"
         "- Chroma: Chromagram showing the energy distribution across the 12 pitch classes (C to B), regardless of octave. Useful for analyzing harmonic content and key.\n"
         "- Fourier Tempogram: Tempo (BPM) energy vs. time computed from the onset envelope via STFT, overlays a dynamic tempo line (peak per frame with log-normal prior). Tip: Use a higher FFT size like 4096.\n"
+        "- Autocorr Tempogram: Tempo (BPM) vs. time via autocorrelation of the onset envelope. More robust to local phase than Fourier Tempogram.\n"
     );
     spectrogramModeBox.addItem("Linear", static_cast<int>(SpectrogramComponent::SpectrogramMode::Linear));
     spectrogramModeBox.addItem("Linear+", static_cast<int>(SpectrogramComponent::SpectrogramMode::LinearPlus));
@@ -163,6 +164,8 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
     spectrogramModeBox.addItem("Spectral Centroid", static_cast<int>(SpectrogramComponent::SpectrogramMode::LinearWithCentroid));
     spectrogramModeBox.addItem("Chroma", static_cast<int>(SpectrogramComponent::SpectrogramMode::Chroma));
     spectrogramModeBox.addItem("Fourier Tempogram", static_cast<int>(SpectrogramComponent::SpectrogramMode::FourierTempogram));
+    spectrogramModeBox.addItem("Autocorr Tempogram", static_cast<int>(SpectrogramComponent::SpectrogramMode::AutoTempogram));
+
 
     spectrogramModeBox.setSelectedId(static_cast<int>(SpectrogramComponent::SpectrogramMode::Linear));  // default: linear
 
@@ -459,6 +462,23 @@ void SpectrogramAudioProcessorEditor::MenuDisableControl(SpectrogramComponent::S
             const int curOrder = fftSizeBox.getSelectedId();
             if (curOrder < 12)  // 2^12=4096
                 fftSizeBox.setSelectedId(12, juce::sendNotificationSync);
+            break;
+        }
+        // Autocorr Tempogram
+        case SpectrogramComponent::SpectrogramMode::AutoTempogram:
+        {
+            logScaleBox.setEnabled(false);
+            yRangeSlider.setEnabled(false);
+            yMinHzEdit.setEnabled(false);
+            yMaxHzEdit.setEnabled(false);
+            floorDbSlider.setEnabled(true);
+            noteAxisToggle.setEnabled(false);
+            tempoAvgResetBtn.setVisible(true);
+            // auto switch FFT size to =2048 for better tempogram results
+            const int curOrder = fftSizeBox.getSelectedId();
+            if (curOrder != 11)  // 2^11=2048
+                fftSizeBox.setSelectedId(11, juce::sendNotificationSync);
+
             break;
         }
         // Linear STFT

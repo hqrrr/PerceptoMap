@@ -37,8 +37,9 @@ public:
         Chroma,
         LinearPlus,
         MelPlus,
-        FourierTempogram
-        // TODO: add Autocorrelation Tempogram, Rhythm, etc.
+        FourierTempogram,
+        AutoTempogram
+        // TODO: add Rhythm, etc.
     };
 
     SpectrogramComponent();
@@ -171,6 +172,8 @@ private:
     void drawReassignedMelSpectrogram(int x, std::vector<float>& dBColumn, int imageHeight);
     // draw Fourier Tempogram
     void drawFourierTempogram(int x, std::vector<float>& dBColumn, int imageHeight);
+    // draw Autocorrelation Tempogram
+    void drawAutoTempogram(int x, std::vector<float>& dBColumn, int imageHeight);
 
     SpectrogramMode currentMode = SpectrogramMode::Linear;
 
