@@ -31,7 +31,7 @@ jobs:
             zip_name: PerceptoMap_vst3_${{ github.ref_name }}_linux_x64.zip
 
           - name: macOS x86
-            os: macos-13
+            os: macos-15-intel
             generator: "Unix Makefiles"
             artifact_path: PerceptoMap_artefacts/Release/VST3/PerceptoMap.vst3
             zip_name: PerceptoMap_vst3_${{ github.ref_name }}_macOS_x64.zip
