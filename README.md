@@ -47,6 +47,12 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
 - Configurable FFT size for balancing time resolution and frequency resolution.<span style="color: gray;">[added in v0.6]</span>
 - Independent scroll speed control, allowing smooth visualization at different FFT sizes and overlap settings without distorting the spectral data. <span style="color: gray;">[added in v0.6]</span>
 - Adjustable y-axis frequency range. <span style="color: gray;">[added in v0.8]</span>
+- Global preset slots for quickly recalling frequently used visualization configurations. Presets are shared across projects and DAWs and can be overwritten via the Save button. Preset data is stored in a human-readable XML file on disk, allowing inspection or manual editing of preset values and names if needed. <span style="color: gray;">[added in v0.13]</span>
+  - Windows: `C:\Users\<username>\AppData\Roaming\PerceptoMap\PerceptoMapPresets.xml`
+  - macOS: `~/Library/Application Support/PerceptoMap/PerceptoMapPresets.xml`
+  - Linux: `~/.config/PerceptoMap/PerceptoMapPresets.xml`
+
+  > **Note:** Editing the XML file while the plugin or DAW is running is not recommended. Changes should be made while the plugin is closed.
 
 
 ## Screenshots
@@ -248,6 +254,7 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
 | Y-axis Range Control | ✅ Done (v0.8) | Precise control over visible frequency band | Dual-handle range slider + editable min/max fields |
 | Fourier Tempogram | ✅ Done (v0.10) | Rhythm/tempo map showing BPM energy over time, with dynamic tempo track (Tempo Line), sharper separation of nearby tempo | Based on [[10.1109/ICASSP.2010.5495219](https://doi.org/10.1109/ICASSP.2010.5495219)]. Positive spectral flux on log-compressed STFT; STFT of the novelty with a Hann window of length `wantWinSec` seconds (default: 8s); BPM axis sampled on a log scale. Per-frame prior-weighted peak picking (log-normal prior) overlays a continuous tempo line.<br/> **Note:** the tempogram and tempo line update with a delay = `wantWinSec` (window accumulation). On entering this mode the FFT size will be auto-bumped to >= 4096 for a more stable onset envelope. |
 | Autocorrelation Tempogram | ✅ Done (v0.12) | Time-lag periodicity map (tempo strength over time, mapped to BPM) with dynamic Tempo Line, robust to local phase, naturally highlights double/half-time relationships | Similar to the Fourier Tempogram, but computed via windowed autocorrelation of the onset/novelty signal. The AutoCorrelation Function (ACF) is normalized by the zero-lag term; the BPM axis is log-spaced, and a per-frame log-normal prior guides peak picking to draw the Tempo Line. Note: entering this mode auto-sets FFT size to 2048 for improved temporal resolution. |
+| Global Preset Slots | ✅ Done (v0.13) | Simple global preset management for frequently used visualization configurations | Three editable preset slots stored globally (shared across projects and DAWs). Presets can be overwritten via the Save button; switching presets immediately applies the stored configuration. Presets are persisted as a human-readable XML file, allowing manual inspection and editing by advanced users. |
 | Spectral Flatness / Contrast | ⏳ Planned | Measures of timbral characteristics | - |
 
 [Back to top ↥](#perceptomap)
