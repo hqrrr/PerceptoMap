@@ -58,12 +58,79 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
         spectrogram.setFrozen(isFrozen);
     };
 
+    // Presets
+    addAndMakeVisible(presetBox);
+    static constexpr int kPlaceholderId = 999;
+    presetBox.setTooltip("Select global preset slot");
+    presetBox.addItem("---", kPlaceholderId);
+    presetBox.addItem("Preset1", 1);
+    presetBox.addItem("Preset2", 2);
+    presetBox.addItem("Preset3", 3);
+    presetBox.setSelectedId(kPlaceholderId, juce::dontSendNotification); // Default
+
+    presetBox.onChange = [this]()
+    {
+        if (isApplyingPreset) return;
+
+        const int id = presetBox.getSelectedId();
+
+        // id == kPlaceholderId -> place holder, no actions
+        if (id == kPlaceholderId)
+        {
+            savePresetButton.setEnabled(false);
+            return;
+        }
+
+        // only Preset 1/2/3 allowed
+        if (id < 1 || id > 3)
+            return;
+
+        savePresetButton.setEnabled(true);
+
+        const int presetIdx = id - 1; // 1->0, 2->1, 3->2
+        auto p = audioProcessor.loadPreset(presetIdx);
+
+        // When switching presets, directly apply them while synchronizing currentSettings
+        applyDataToUI(p, true);
+        pushCurrentToProcessor();
+    };
+
+    addAndMakeVisible(savePresetButton);
+    savePresetButton.setTooltip("Overwrite selected preset with current settings");
+    savePresetButton.setButtonText("Save");
+    savePresetButton.setEnabled(false);
+    savePresetButton.onClick = [this]()
+    {
+        const int id = presetBox.getSelectedId();
+        // id == kPlaceholderId -> place holder, no actions
+        if (id == kPlaceholderId)
+            return;
+
+        // only Preset 1/2/3 allowed
+        if (id < 1 || id > 3)
+            return;
+
+        const int presetIdx = id - 1;
+        auto d = captureUIToData();
+        audioProcessor.savePreset(presetIdx, d);
+
+        savePresetButton.setButtonText("Saved");
+        // delay 1000 ms
+        juce::Timer::callAfterDelay(1000, [btn = juce::Component::SafePointer<juce::TextButton>(&savePresetButton)]
+        {
+            if (btn != nullptr)
+                btn->setButtonText("Save");
+        });
+    };
+
+    // ==== 2nd row ====
+
     // Label
-    addAndMakeVisible(row1stLabel);
-    row1stLabel.setText("General:", juce::dontSendNotification);
-    row1stLabel.setJustificationType(juce::Justification::centredRight);
-    row1stLabel.setColour(juce::Label::textColourId, juce::Colours::white.withAlpha(labelAlpha));
-    row1stLabel.setInterceptsMouseClicks(false, false);
+    addAndMakeVisible(rowGeneralLabel);
+    rowGeneralLabel.setText("General:", juce::dontSendNotification);
+    rowGeneralLabel.setJustificationType(juce::Justification::centredRight);
+    rowGeneralLabel.setColour(juce::Label::textColourId, juce::Colours::white.withAlpha(labelAlpha));
+    rowGeneralLabel.setInterceptsMouseClicks(false, false);
 
     // Add and configure FPS dropdown
     addAndMakeVisible(fpsBox);
@@ -78,6 +145,7 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
     fpsBox.onChange = [this]()
     {
         spectrogram.setUiFps(fpsBox.getSelectedId());
+        pushCurrentToProcessor();
     };
 
     spectrogram.setUiFps(fpsBox.getSelectedId());
@@ -98,6 +166,7 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
         spectrogram.setFFTOrder(newOrder);
         updateLegendImage();
         repaint();
+        pushCurrentToProcessor();
     };
 
     // Add and configure overlap dropdown
@@ -111,16 +180,17 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
     overlapBox.onChange = [this]()
     {
         spectrogram.setOverlap(overlapBox.getSelectedId());
+        pushCurrentToProcessor();
     };
 
-    // ==== 2nd row ====
+    // ==== 3rd row ====
     
     // Label
-    addAndMakeVisible(row2ndLabel);
-    row2ndLabel.setText("Mode:", juce::dontSendNotification);
-    row2ndLabel.setJustificationType(juce::Justification::centredRight);
-    row2ndLabel.setColour(juce::Label::textColourId, juce::Colours::white.withAlpha(labelAlpha));
-    row2ndLabel.setInterceptsMouseClicks(false, false);
+    addAndMakeVisible(rowSpectroLabel);
+    rowSpectroLabel.setText("Mode:", juce::dontSendNotification);
+    rowSpectroLabel.setJustificationType(juce::Justification::centredRight);
+    rowSpectroLabel.setColour(juce::Label::textColourId, juce::Colours::white.withAlpha(labelAlpha));
+    rowSpectroLabel.setInterceptsMouseClicks(false, false);
 
     // Add and configure colour scheme combo box
     addAndMakeVisible(colourSchemeBox);
@@ -140,6 +210,7 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
         spectrogram.setColourScheme(static_cast<SpectrogramComponent::ColourScheme>(selectedId));
         updateLegendImage();
         repaint();
+        pushCurrentToProcessor();
     };
     
     // Add and configure spectrogram mode combo box
@@ -175,11 +246,10 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
         auto mode = static_cast<SpectrogramComponent::SpectrogramMode>(selectedId);
         spectrogram.setSpectrogramMode(mode);
         updateLegendImage();
-
         // Enable/disable controls by mode
         MenuDisableControl(mode);
-        
         repaint();
+        pushCurrentToProcessor();
     };
 
     // Label
@@ -200,12 +270,13 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
     floorDbSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 60, 20);
 
     floorDbSlider.onValueChange = [this]()
-        {
-            float db = (float)floorDbSlider.getValue();
-            spectrogram.setFloorDb(db);
-            updateLegendImage();
-            repaint();
-        };
+    {
+        float db = (float)floorDbSlider.getValue();
+        spectrogram.setFloorDb(db);
+        updateLegendImage();
+        repaint();
+        pushCurrentToProcessor();
+    };
     // double click to reset
     floorDbSlider.setDoubleClickReturnValue(true, -100.0);
 
@@ -221,23 +292,24 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
     normFactorSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 60, 20);
 
     normFactorSlider.onValueChange = [this]()
-        {
-            float scale = (float)normFactorSlider.getValue();
-            spectrogram.setNormFactor(scale);
-            updateLegendImage();
-            repaint();
-        };
+    {
+        float scale = (float)normFactorSlider.getValue();
+        spectrogram.setNormFactor(scale);
+        updateLegendImage();
+        repaint();
+        pushCurrentToProcessor();
+    };
     // double click to reset
     normFactorSlider.setDoubleClickReturnValue(true, 1.0);
 
-    // ==== 3rd row ====
+    // ==== 4th row ====
 
     // Label
-    addAndMakeVisible(row3rdLabel);
-    row3rdLabel.setText("Axes:", juce::dontSendNotification);
-    row3rdLabel.setJustificationType(juce::Justification::centredRight);
-    row3rdLabel.setColour(juce::Label::textColourId, juce::Colours::white.withAlpha(labelAlpha));
-    row3rdLabel.setInterceptsMouseClicks(false, false);
+    addAndMakeVisible(rowAxisLabel);
+    rowAxisLabel.setText("Axes:", juce::dontSendNotification);
+    rowAxisLabel.setJustificationType(juce::Justification::centredRight);
+    rowAxisLabel.setColour(juce::Label::textColourId, juce::Colours::white.withAlpha(labelAlpha));
+    rowAxisLabel.setInterceptsMouseClicks(false, false);
 
     // Add and configure scroll speed dropdown
     addAndMakeVisible(scrollSpeedBox);
@@ -256,6 +328,7 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
     {
         const int sp = scrollSpeedBox.getSelectedId();
         spectrogram.setScrollSpeedMultiplier(sp);
+        pushCurrentToProcessor();
     };
 
     // Add and configure log scale (y axis) combo box
@@ -272,6 +345,7 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
     {
         bool useLog = logScaleBox.getSelectedId() == 2;
         spectrogram.setUseLogFrequency(useLog);
+        pushCurrentToProcessor();
     };
 
     // y axis frequency range controls
@@ -355,6 +429,7 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
 
         WhichEnd end = std::abs(a - lastYMinHz) >= std::abs(b - lastYMaxHz) ? WhichEnd::Min : WhichEnd::Max;
         applyYRange(a, b, end);
+        pushCurrentToProcessor();
     };
     // connect text box
     auto commitMin = [this, applyYRange]()
@@ -389,6 +464,7 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
     {
         spectrogram.setShowNoteCAxis(noteAxisToggle.getToggleState());
         repaint();
+        pushCurrentToProcessor();
     };
 
     // reset tempo avg button in Tempogram
@@ -399,11 +475,15 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
     {
         spectrogram.resetTempoStats();
         //repaint();
+        pushCurrentToProcessor();
     };
     tempoAvgResetBtn.setColour(juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
     tempoAvgResetBtn.setColour(juce::TextButton::textColourOnId, juce::Colours::lightgrey);
     tempoAvgResetBtn.setColour(juce::TextButton::textColourOffId, juce::Colours::lightgrey);
     tempoAvgResetBtn.setVisible(false);
+
+
+    applyDataToUI(audioProcessor.getCurrentSettings(), true);
 
 }
 
@@ -576,24 +656,106 @@ void SpectrogramAudioProcessorEditor::refreshYRangeSliderForSampleRate(double sr
     spectrogram.setFrequencyRangeHz((float)a, (float)b);
 }
 
+SpectrogramAudioProcessor::PresetData SpectrogramAudioProcessorEditor::captureUIToData() const
+{
+    SpectrogramAudioProcessor::PresetData d;
+    d.fpsId = fpsBox.getSelectedId();
+    d.fftOrderId = fftSizeBox.getSelectedId();
+    d.overlapId = overlapBox.getSelectedId();
+
+    d.modeId = spectrogramModeBox.getSelectedId();
+    d.colourId = colourSchemeBox.getSelectedId();
+
+    d.floorDb = floorDbSlider.getValue();
+    d.normFactor = normFactorSlider.getValue();
+
+    d.scrollSpeedId = scrollSpeedBox.getSelectedId();
+    d.logScaleId = logScaleBox.getSelectedId();
+
+    d.yMinHz = yRangeSlider.getMinValue();
+    d.yMaxHz = yRangeSlider.getMaxValue();
+
+    d.noteAxis = noteAxisToggle.getToggleState();
+    return d;
+}
+
+void SpectrogramAudioProcessorEditor::pushCurrentToProcessor()
+{
+    audioProcessor.setCurrentSettings(captureUIToData());
+}
+
+void SpectrogramAudioProcessorEditor::applyDataToUI(
+    const SpectrogramAudioProcessor::PresetData& d,
+    bool alsoApplyToSpectrogram)
+{
+    juce::ScopedValueSetter<bool> guard(isApplyingPreset, true);
+
+    fpsBox.setSelectedId(d.fpsId, juce::dontSendNotification);
+    fftSizeBox.setSelectedId(d.fftOrderId, juce::dontSendNotification);
+    overlapBox.setSelectedId(d.overlapId, juce::dontSendNotification);
+
+    spectrogramModeBox.setSelectedId(d.modeId, juce::dontSendNotification);
+    colourSchemeBox.setSelectedId(d.colourId, juce::dontSendNotification);
+
+    floorDbSlider.setValue(d.floorDb, juce::dontSendNotification);
+    normFactorSlider.setValue(d.normFactor, juce::dontSendNotification);
+
+    scrollSpeedBox.setSelectedId(d.scrollSpeedId, juce::dontSendNotification);
+    logScaleBox.setSelectedId(d.logScaleId, juce::dontSendNotification);
+
+    yRangeSlider.setMinAndMaxValues(d.yMinHz, d.yMaxHz, juce::dontSendNotification);
+    yMinHzEdit.setText(juce::String((int)d.yMinHz), juce::dontSendNotification);
+    yMaxHzEdit.setText(juce::String((int)d.yMaxHz), juce::dontSendNotification);
+
+    noteAxisToggle.setToggleState(d.noteAxis, juce::dontSendNotification);
+
+    if (!alsoApplyToSpectrogram)
+        return;
+
+    spectrogram.setUiFps(d.fpsId);
+    spectrogram.setFFTOrder(d.fftOrderId);
+    spectrogram.setOverlap(d.overlapId);
+
+    auto mode = (SpectrogramComponent::SpectrogramMode)d.modeId;
+    spectrogram.setSpectrogramMode(mode);
+    MenuDisableControl(mode);
+
+    spectrogram.setColourScheme((SpectrogramComponent::ColourScheme)d.colourId);
+    spectrogram.setFloorDb((float)d.floorDb);
+    spectrogram.setNormFactor((float)d.normFactor);
+
+    spectrogram.setScrollSpeedMultiplier(d.scrollSpeedId);
+    spectrogram.setUseLogFrequency(d.logScaleId == 2);
+
+    spectrogram.setFrequencyRangeHz((float)d.yMinHz, (float)d.yMaxHz);
+    spectrogram.setShowNoteCAxis(d.noteAxis);
+
+    updateLegendImage();
+    repaint();
+}
+
+
 void SpectrogramAudioProcessorEditor::updateControlsVisibility()
 {
     // 1st
     freezeButton.setVisible(controlsVisible);
-    row1stLabel.setVisible(controlsVisible);
+    presetBox.setVisible(controlsVisible);
+    savePresetButton.setVisible(controlsVisible);
+    // 2nd
+    rowGeneralLabel.setVisible(controlsVisible);
     fpsBox.setVisible(controlsVisible);
     fftSizeBox.setVisible(controlsVisible);
     overlapBox.setVisible(controlsVisible);
-    // 2nd
-    row2ndLabel.setVisible(controlsVisible);
+    // 3rd
+    rowSpectroLabel.setVisible(controlsVisible);
     colourSchemeBox.setVisible(controlsVisible);
     spectrogramModeBox.setVisible(controlsVisible);
     menuDisplayLabel.setVisible(controlsVisible);
     logScaleBox.setVisible(controlsVisible);
     floorDbSlider.setVisible(controlsVisible);
     normFactorSlider.setVisible(controlsVisible);
-    // 3rd
-    row3rdLabel.setVisible(controlsVisible);
+    // 4th
+    rowAxisLabel.setVisible(controlsVisible);
     scrollSpeedBox.setVisible(controlsVisible);
     yRangeSlider.setVisible(controlsVisible);
     yMinHzEdit.setVisible(controlsVisible);
@@ -611,56 +773,65 @@ void SpectrogramAudioProcessorEditor::resized()
 
     const int rowH = controlsVisible ? kRowHeight : 0;
 
-    // top row: freeze button & FFT settings & legend bar
-    auto topRow = area.removeFromTop(rowH);
+    // first row: freeze button & presets
+    auto firstRow = area.removeFromTop(rowH);
     if (controlsVisible)
     {
         // freeze button
-        freezeButton.setBounds(topRow.removeFromLeft(100).reduced(5));
-        // label
-        row1stLabel.setBounds(topRow.removeFromLeft(60));
-        // UI FPS
-        fpsBox.setBounds(topRow.removeFromLeft(100).reduced(5));
-        // FFT size dropdown
-        fftSizeBox.setBounds(topRow.removeFromLeft(90).reduced(5));
-        // overlap
-        overlapBox.setBounds(topRow.removeFromLeft(90).reduced(5));
+        freezeButton.setBounds(firstRow.removeFromLeft(100).reduced(5));
+        // presets
+        presetBox.setBounds(firstRow.removeFromLeft(110).reduced(5));
+        savePresetButton.setBounds(firstRow.removeFromLeft(70).reduced(5));
     }
 
-    // second row: spectrogram settings
+    // second row: general settings
     auto secondRow = area.removeFromTop(rowH);
     if (controlsVisible)
     {
         // label
-        row2ndLabel.setBounds(secondRow.removeFromLeft(50));
-        // spectrogram mode
-        spectrogramModeBox.setBounds(secondRow.removeFromLeft(100).reduced(5));
-        // label
-        menuDisplayLabel.setBounds(secondRow.removeFromLeft(60));
-        // colour scheme
-        colourSchemeBox.setBounds(secondRow.removeFromLeft(100).reduced(5));
-        // slider floor value colour scheme
-        floorDbSlider.setBounds(secondRow.removeFromLeft(200).reduced(5));
-        // slider norm factor
-        normFactorSlider.setBounds(secondRow.removeFromLeft(200).reduced(5));
+        rowGeneralLabel.setBounds(secondRow.removeFromLeft(60));
+        // UI FPS
+        fpsBox.setBounds(secondRow.removeFromLeft(100).reduced(5));
+        // FFT size dropdown
+        fftSizeBox.setBounds(secondRow.removeFromLeft(100).reduced(5));
+        // overlap
+        overlapBox.setBounds(secondRow.removeFromLeft(100).reduced(5));
     }
 
-    // third row: x/y axis control
+    // third row: spectrogram settings
     auto thirdRow = area.removeFromTop(rowH);
     if (controlsVisible)
     {
         // label
-        row3rdLabel.setBounds(thirdRow.removeFromLeft(50));
+        rowSpectroLabel.setBounds(thirdRow.removeFromLeft(60));
+        // spectrogram mode
+        spectrogramModeBox.setBounds(thirdRow.removeFromLeft(100).reduced(5));
+        // label
+        menuDisplayLabel.setBounds(thirdRow.removeFromLeft(60));
+        // colour scheme
+        colourSchemeBox.setBounds(thirdRow.removeFromLeft(100).reduced(5));
+        // slider floor value colour scheme
+        floorDbSlider.setBounds(thirdRow.removeFromLeft(200).reduced(5));
+        // slider norm factor
+        normFactorSlider.setBounds(thirdRow.removeFromLeft(200).reduced(5));
+    }
+
+    // fourth row: x/y axis control
+    auto fourthRow = area.removeFromTop(rowH);
+    if (controlsVisible)
+    {
+        // label
+        rowAxisLabel.setBounds(fourthRow.removeFromLeft(60));
         // x axis scroll speed
-        scrollSpeedBox.setBounds(thirdRow.removeFromLeft(100).reduced(5));
+        scrollSpeedBox.setBounds(fourthRow.removeFromLeft(100).reduced(5));
         // y axis type: log or linear (for linear STFT spectrogram)
-        logScaleBox.setBounds(thirdRow.removeFromLeft(100).reduced(5));
+        logScaleBox.setBounds(fourthRow.removeFromLeft(100).reduced(5));
         // slider y axis range
-        yMinHzEdit.setBounds(thirdRow.removeFromLeft(60).reduced(5));
-        yRangeSlider.setBounds(thirdRow.removeFromLeft(200).reduced(5));
-        yMaxHzEdit.setBounds(thirdRow.removeFromLeft(60).reduced(5));
+        yMinHzEdit.setBounds(fourthRow.removeFromLeft(60).reduced(5));
+        yRangeSlider.setBounds(fourthRow.removeFromLeft(200).reduced(5));
+        yMaxHzEdit.setBounds(fourthRow.removeFromLeft(60).reduced(5));
         // y axis (note)
-        noteAxisToggle.setBounds(thirdRow.removeFromLeft(130).reduced(5));
+        noteAxisToggle.setBounds(fourthRow.removeFromLeft(130).reduced(5));
     }
 
     // rest: spectrogram

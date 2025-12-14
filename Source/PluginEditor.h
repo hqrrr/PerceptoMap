@@ -106,12 +106,20 @@ private:
 
     // row labels
     float labelAlpha = 0.8f;
-    juce::Label row1stLabel;
-    juce::Label row2ndLabel;
-    juce::Label row3rdLabel;
+    juce::Label rowGeneralLabel;
+    juce::Label rowSpectroLabel;
+    juce::Label rowAxisLabel;
     
     // other labels
     juce::Label menuDisplayLabel;
+
+    // presets
+    juce::ComboBox presetBox;
+    juce::TextButton savePresetButton{ "Save" };
+    bool isApplyingPreset = false;
+    SpectrogramAudioProcessor::PresetData captureUIToData() const;
+    void applyDataToUI(const SpectrogramAudioProcessor::PresetData& d, bool alsoApplyToSpectrogram);
+    void pushCurrentToProcessor();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SpectrogramAudioProcessorEditor)
 };

@@ -26,6 +26,12 @@ SpectrogramAudioProcessor::SpectrogramAudioProcessor()
     )
 #endif
 {
+    // try to load global presets from disk
+    loadGlobalPresetsFromDisk();
+    ensurePresetSlots();
+
+    // current settings: Preset1 is selected by default
+    currentSettings = loadPreset(0);
 }
 
 SpectrogramAudioProcessor::~SpectrogramAudioProcessor()
@@ -156,12 +162,44 @@ juce::AudioProcessorEditor* SpectrogramAudioProcessor::createEditor()
 //==============================================================================
 void SpectrogramAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
-    // Save plugin state (e.g. parameters, settings) here if needed
+    juce::ValueTree state{ "PerceptoMapState" };
+    // Save plugin state
+    state.setProperty("cur_fpsId", currentSettings.fpsId, nullptr);
+    state.setProperty("cur_fftOrderId", currentSettings.fftOrderId, nullptr);
+    state.setProperty("cur_overlapId", currentSettings.overlapId, nullptr);
+    state.setProperty("cur_modeId", currentSettings.modeId, nullptr);
+    state.setProperty("cur_colourId", currentSettings.colourId, nullptr);
+    state.setProperty("cur_floorDb", currentSettings.floorDb, nullptr);
+    state.setProperty("cur_normFactor", currentSettings.normFactor, nullptr);
+    state.setProperty("cur_scrollSpeedId", currentSettings.scrollSpeedId, nullptr);
+    state.setProperty("cur_logScaleId", currentSettings.logScaleId, nullptr);
+    state.setProperty("cur_yMinHz", currentSettings.yMinHz, nullptr);
+    state.setProperty("cur_yMaxHz", currentSettings.yMaxHz, nullptr);
+    state.setProperty("cur_noteAxis", currentSettings.noteAxis, nullptr);
+
+    juce::MemoryOutputStream mos(destData, true);
+    state.writeToStream(mos);
 }
 
 void SpectrogramAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
-    // Restore plugin state here if needed
+    // Restore plugin state
+    auto vt = juce::ValueTree::readFromData(data, (size_t)sizeInBytes);
+    if (!vt.isValid() || !vt.hasType("PerceptoMapState"))
+        return;
+
+    currentSettings.fpsId = (int)vt.getProperty("cur_fpsId", currentSettings.fpsId);
+    currentSettings.fftOrderId = (int)vt.getProperty("cur_fftOrderId", currentSettings.fftOrderId);
+    currentSettings.overlapId = (int)vt.getProperty("cur_overlapId", currentSettings.overlapId);
+    currentSettings.modeId = (int)vt.getProperty("cur_modeId", currentSettings.modeId);
+    currentSettings.colourId = (int)vt.getProperty("cur_colourId", currentSettings.colourId);
+    currentSettings.floorDb = (double)vt.getProperty("cur_floorDb", currentSettings.floorDb);
+    currentSettings.normFactor = (double)vt.getProperty("cur_normFactor", currentSettings.normFactor);
+    currentSettings.scrollSpeedId = (int)vt.getProperty("cur_scrollSpeedId", currentSettings.scrollSpeedId);
+    currentSettings.logScaleId = (int)vt.getProperty("cur_logScaleId", currentSettings.logScaleId);
+    currentSettings.yMinHz = (double)vt.getProperty("cur_yMinHz", currentSettings.yMinHz);
+    currentSettings.yMaxHz = (double)vt.getProperty("cur_yMaxHz", currentSettings.yMaxHz);
+    currentSettings.noteAxis = (bool)vt.getProperty("cur_noteAxis", currentSettings.noteAxis);
 }
 
 //==============================================================================
@@ -169,3 +207,130 @@ juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new SpectrogramAudioProcessor();
 }
+
+
+void SpectrogramAudioProcessor::ensurePresetSlots()
+{
+    auto presets = globalPresetTree.getChildWithName("Presets");
+    if (!presets.isValid())
+    {
+        presets = juce::ValueTree("Presets");
+        globalPresetTree.addChild(presets, -1, nullptr);
+    }
+
+    auto makePresetNode = [](const juce::String& name, const PresetData& d)
+    {
+        juce::ValueTree p{ "Preset" };
+        p.setProperty("name", name, nullptr);
+        p.setProperty("fpsId", d.fpsId, nullptr);
+        p.setProperty("fftOrderId", d.fftOrderId, nullptr);
+        p.setProperty("overlapId", d.overlapId, nullptr);
+        p.setProperty("modeId", d.modeId, nullptr);
+        p.setProperty("colourId", d.colourId, nullptr);
+        p.setProperty("floorDb", d.floorDb, nullptr);
+        p.setProperty("normFactor", d.normFactor, nullptr);
+        p.setProperty("scrollSpeedId", d.scrollSpeedId, nullptr);
+        p.setProperty("logScaleId", d.logScaleId, nullptr);
+        p.setProperty("yMinHz", d.yMinHz, nullptr);
+        p.setProperty("yMaxHz", d.yMaxHz, nullptr);
+        p.setProperty("noteAxis", d.noteAxis, nullptr);
+        return p;
+    };
+
+    PresetData def;
+
+    while (presets.getNumChildren() < kNumPresets)
+    {
+        const int i = presets.getNumChildren();
+        presets.addChild(makePresetNode("Preset" + juce::String(i + 1), def), -1, nullptr);
+    }
+}
+
+SpectrogramAudioProcessor::PresetData SpectrogramAudioProcessor::loadPreset(int idx) const
+{
+    PresetData d;
+    idx = juce::jlimit(0, kNumPresets - 1, idx);
+
+    auto presets = globalPresetTree.getChildWithName("Presets");
+    if (!presets.isValid() || presets.getNumChildren() <= idx)
+        return d;
+
+    auto p = presets.getChild(idx);
+
+    d.fpsId = (int)p.getProperty("fpsId", d.fpsId);
+    d.fftOrderId = (int)p.getProperty("fftOrderId", d.fftOrderId);
+    d.overlapId = (int)p.getProperty("overlapId", d.overlapId);
+
+    d.modeId = (int)p.getProperty("modeId", d.modeId);
+    d.colourId = (int)p.getProperty("colourId", d.colourId);
+
+    d.floorDb = (double)p.getProperty("floorDb", d.floorDb);
+    d.normFactor = (double)p.getProperty("normFactor", d.normFactor);
+
+    d.scrollSpeedId = (int)p.getProperty("scrollSpeedId", d.scrollSpeedId);
+    d.logScaleId = (int)p.getProperty("logScaleId", d.logScaleId);
+
+    d.yMinHz = (double)p.getProperty("yMinHz", d.yMinHz);
+    d.yMaxHz = (double)p.getProperty("yMaxHz", d.yMaxHz);
+
+    d.noteAxis = (bool)p.getProperty("noteAxis", d.noteAxis);
+
+    return d;
+}
+
+void SpectrogramAudioProcessor::savePreset(int idx, const PresetData& d)
+{
+    idx = juce::jlimit(0, kNumPresets - 1, idx);
+
+    auto presets = globalPresetTree.getChildWithName("Presets");
+    if (!presets.isValid() || presets.getNumChildren() <= idx)
+        return;
+
+    auto p = presets.getChild(idx);
+
+    p.setProperty("fpsId", d.fpsId, nullptr);
+    p.setProperty("fftOrderId", d.fftOrderId, nullptr);
+    p.setProperty("overlapId", d.overlapId, nullptr);
+    p.setProperty("modeId", d.modeId, nullptr);
+    p.setProperty("colourId", d.colourId, nullptr);
+    p.setProperty("floorDb", d.floorDb, nullptr);
+    p.setProperty("normFactor", d.normFactor, nullptr);
+    p.setProperty("scrollSpeedId", d.scrollSpeedId, nullptr);
+    p.setProperty("logScaleId", d.logScaleId, nullptr);
+    p.setProperty("yMinHz", d.yMinHz, nullptr);
+    p.setProperty("yMaxHz", d.yMaxHz, nullptr);
+    p.setProperty("noteAxis", d.noteAxis, nullptr);
+
+    saveGlobalPresetsToDisk();
+}
+
+static juce::File getGlobalPresetFile()
+{
+    auto dir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+        .getChildFile("PerceptoMap");
+    dir.createDirectory();
+    return dir.getChildFile("PerceptoMapPresets.xml");
+}
+
+void SpectrogramAudioProcessor::saveGlobalPresetsToDisk() const
+{
+    auto file = getGlobalPresetFile();
+    if (auto xml = globalPresetTree.createXml())
+        xml->writeTo(file);
+}
+
+void SpectrogramAudioProcessor::loadGlobalPresetsFromDisk()
+{
+    auto file = getGlobalPresetFile();
+    if (!file.existsAsFile())
+        return;
+
+    auto xml = juce::XmlDocument::parse(file);
+    if (!xml)
+        return;
+
+    auto vt = juce::ValueTree::fromXml(*xml);
+    if (vt.isValid() && vt.hasType("PerceptoMapGlobalPresets"))
+        globalPresetTree = vt;
+}
+

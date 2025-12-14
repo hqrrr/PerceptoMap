@@ -13,6 +13,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "SpectrogramComponent.h"
 
 //==============================================================================
 /**
@@ -21,6 +22,29 @@
 class SpectrogramAudioProcessor : public juce::AudioProcessor
 {
 public:
+    static constexpr int kNumPresets = 3;
+
+    struct PresetData
+    {
+        int fpsId = 60;
+        int fftOrderId = 11;
+        int overlapId = 2;
+
+        int modeId = (int)SpectrogramComponent::SpectrogramMode::Linear;
+        int colourId = (int)SpectrogramComponent::ColourScheme::Classic;
+
+        double floorDb = -100.0;
+        double normFactor = 1.0;
+
+        int scrollSpeedId = 2;
+        int logScaleId = 2;
+
+        double yMinHz = 30.0;
+        double yMaxHz = 22050.0;
+
+        bool noteAxis = false;
+    };
+
     //==============================================================================
     SpectrogramAudioProcessor();
     ~SpectrogramAudioProcessor() override;
@@ -58,6 +82,25 @@ public:
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
+
+    // current settings
+    const PresetData& getCurrentSettings() const { return currentSettings; }
+    void setCurrentSettings(const PresetData& d) { currentSettings = d; }
+
+    // global presets
+    PresetData loadPreset(int idx) const;
+    void savePreset(int idx, const PresetData& d);
+
 private:
+    // current settings
+    PresetData currentSettings;
+
+    // global presets
+    juce::ValueTree globalPresetTree{ "PerceptoMapGlobalPresets" };
+
+    void loadGlobalPresetsFromDisk();
+    void saveGlobalPresetsToDisk() const;
+    void ensurePresetSlots();
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SpectrogramAudioProcessor)
 };
