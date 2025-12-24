@@ -108,8 +108,8 @@ void SpectrogramComponent::setFFTOrder(int newOrder)
 
 void SpectrogramComponent::setOverlap(int newOverlap)
 {
-    // only 1/2/4/8 allowed
-    int allowed[] = {1, 2, 4, 8};
+    // only 1/2/4/8/16/32/64 allowed
+    int allowed[] = {1, 2, 4, 8, 16, 32, 64};
     int best = 1;
     for (int v : allowed) if (std::abs(v - newOverlap) < std::abs(best - newOverlap)) best = v;
 

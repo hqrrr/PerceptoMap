@@ -171,11 +171,14 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
 
     // Add and configure overlap dropdown
     addAndMakeVisible(overlapBox);
-    overlapBox.setTooltip("FFT overlap (1/2/4/8), corresponding to overlap ratio 0/50/75/87.5 %. Affects time resolution. The larger the overlap, the more FFTs are performed per second, which means increased CPU overhead.");
+    overlapBox.setTooltip("FFT overlap (1/2/4/8/16/32/64), corresponding to overlap ratio 0/50/75/87.5/93.75/96.88/98.44 %. Affects time resolution. The larger the overlap, the more FFTs are performed per second, which means increased CPU overhead.");
     overlapBox.addItem("0 %", 1);
     overlapBox.addItem("50 %", 2);
     overlapBox.addItem("75 %", 4);
     overlapBox.addItem("87.5 %", 8);
+    overlapBox.addItem("93.75 %", 16);
+    overlapBox.addItem("96.88 %", 32);
+    overlapBox.addItem("98.44 %", 64);
     overlapBox.setSelectedId(2); // default = 2 (50%)
     overlapBox.onChange = [this]()
     {
