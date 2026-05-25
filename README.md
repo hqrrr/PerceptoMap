@@ -340,7 +340,7 @@ Based on [JUCE CMake Plugin Template](https://github.com/anthonyalfimov/JUCE-CMa
 2. Visual Studio will automatically detect the CMakeLists.txt.
 3. Select a CMake target configuration (e.g. x64-Release).
 4. In the CMake Targets View: `PerceptoMap/PerceptoMap Project/Targets`, right-click `PerceptoMap_VST3` and click Build.
-4. The plugin binary will be placed in the build output directory: `out/build/x64-Release/VST3/PerceptoMap.vst3`
+5. The plugin binary will be placed in the build output directory: `out/build/x64-Release/VST3/PerceptoMap.vst3`
 
 #### On Windows (Terminal)
 
@@ -402,8 +402,8 @@ If you use **PerceptoMap** in academic work, please cite a tagged release.
   author  = {Qirui Huang},
   title   = {PerceptoMap},
   subtitle= {VST3 spectrogram and psychoacoustic visualizer},
-  version = {v0.8},
-  date    = {2025},
+  version = {v0.15},
+  date    = {2026},
   url     = {https://github.com/hqrrr/PerceptoMap},
   note    = {GitHub repository},
   doi     = {10.5281/zenodo.16923138}
