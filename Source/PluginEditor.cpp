@@ -236,6 +236,7 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
     spectrogramModeBox.addItem("Mel+", static_cast<int>(SpectrogramComponent::SpectrogramMode::MelPlus));
     spectrogramModeBox.addItem("MFCC", static_cast<int>(SpectrogramComponent::SpectrogramMode::MFCC));
     spectrogramModeBox.addItem("Spectral Centroid", static_cast<int>(SpectrogramComponent::SpectrogramMode::LinearWithCentroid));
+    spectrogramModeBox.addItem("Spectral Contrast", static_cast<int>(SpectrogramComponent::SpectrogramMode::SpectralContrast));
     spectrogramModeBox.addItem("Chroma", static_cast<int>(SpectrogramComponent::SpectrogramMode::Chroma));
     spectrogramModeBox.addItem("Fourier Tempogram", static_cast<int>(SpectrogramComponent::SpectrogramMode::FourierTempogram));
     spectrogramModeBox.addItem("Autocorr Tempogram", static_cast<int>(SpectrogramComponent::SpectrogramMode::AutoTempogram));
@@ -527,6 +528,18 @@ void SpectrogramAudioProcessorEditor::MenuDisableControl(SpectrogramComponent::S
             yMinHzEdit.setEnabled(false);
             yMaxHzEdit.setEnabled(false);
             floorDbSlider.setEnabled(false);
+            noteAxisToggle.setEnabled(false);
+            tempoAvgResetBtn.setVisible(false);
+            break;
+        }
+        // Spectral Contrast
+        case SpectrogramComponent::SpectrogramMode::SpectralContrast:
+        {
+            logScaleBox.setEnabled(false);
+            yRangeSlider.setEnabled(false);
+            yMinHzEdit.setEnabled(false);
+            yMaxHzEdit.setEnabled(false);
+            floorDbSlider.setEnabled(true);
             noteAxisToggle.setEnabled(false);
             tempoAvgResetBtn.setVisible(false);
             break;

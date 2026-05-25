@@ -38,7 +38,8 @@ public:
         LinearPlus,
         MelPlus,
         FourierTempogram,
-        AutoTempogram
+        AutoTempogram,
+        SpectralContrast
         // TODO: add Rhythm, etc.
     };
 
@@ -150,6 +151,7 @@ private:
     void paintMelYAxis(juce::Graphics& g, const int width, const int imageHeight);
     void paintMFCCYAxis(juce::Graphics& g, const int width, const int imageHeight);
     void paintChromaYAxis(juce::Graphics& g, const int width, const int imageHeight);
+    void paintSpectralContrastYAxis(juce::Graphics& g, const int width, const int imageHeight);
     void paintSTFTYAxis(juce::Graphics& g, const int width, const int imageHeight);
     // y axis frequency range
     float minFreqHz = 30.0f;
@@ -168,6 +170,7 @@ private:
     void drawMFCC(int x, std::vector<float>& dBColumn, const int imageHeight);
     void drawLinearWithCentroid(int x, std::vector<float>& dBColumn, const int imageHeight, const float maxFreq);
     void drawChroma(int x, std::vector<float>& dBColumn, const int imageHeight);
+    void drawSpectralContrast(int x, std::vector<float>& dBColumn, const int imageHeight);
     void drawReassignedSpectrogram(int x, std::vector<float>& dBColumn, const int imageHeight, const float maxFreq);
     void drawReassignedMelSpectrogram(int x, std::vector<float>& dBColumn, int imageHeight);
     // draw Fourier Tempogram
@@ -187,6 +190,7 @@ private:
     juce::String drawMelTooltip(float dB, const int imgY, float freq);
     juce::String drawMFCCTooltip(float dB, const int imgY, const int imageHeight);
     juce::String drawChromaTooltip(const int dBIndex, const int imgY, const int imageHeight);
+    juce::String drawSpectralContrastTooltip(const int dBIndex, const int imgY, const int imageHeight);
     juce::String drawSTFTTooltip(float dB, const int imgY, float freq);
     juce::String drawTempogramTooltip(float dB, const int imgY, const int imageHeight);
 
@@ -200,7 +204,7 @@ private:
     const int melBands = 128;
     // MFCC:
     // Number of MFCC coefficients to extract after DCT.
-    // Only the lowest `numCoeffs` (typically 13–20) are retained,
+    // Only the lowest `numCoeffs` (typically 13ï¿½20) are retained,
     // matching librosa's `n_mfcc=20` default.
     // These are what we visualize along the vertical axis of the MFCC image.
     const int numCoeffs = 20;
@@ -225,6 +229,11 @@ private:
     std::vector<std::vector<float>> chromaFilterBank;
     const int numChroma = 12;
     const char* pitchNames[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+
+    // Spectral Contrast
+    int nBands = 6;
+    float fMinHzContrast = 200.0f;
+    float quantile = 0.02f;
 
     // Time-Frequency reassigned STFT spectrogram
     // adjust to control density

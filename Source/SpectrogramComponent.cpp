@@ -652,6 +652,80 @@ void SpectrogramComponent::drawChroma(int x, std::vector<float>& dBColumn, const
     }
 }
 
+void SpectrogramComponent::drawSpectralContrast(int x, std::vector<float>& dBColumn, const int imageHeight)
+{
+    const int nBins = fftSize / 2;
+    const float maxHz = static_cast<float>(sampleRate) * 0.5f;
+    const float binFreqResolution = static_cast<float>(sampleRate) / fftSize;
+    const int totalBands = nBands + 1;
+
+    // Collect magnitudes per band
+    std::vector<std::vector<float>> bandMagnitudes(totalBands);
+    for (int i = 1; i < nBins; ++i)
+    {
+        float freq = i * binFreqResolution;
+        if (freq > maxHz) break;
+
+        int bandIdx = 0;
+        if (freq >= fMinHzContrast)
+        {
+            float log2ratio = std::log2(freq / fMinHzContrast);
+            bandIdx = 1 + static_cast<int>(log2ratio);
+            bandIdx = juce::jlimit(0, totalBands - 1, bandIdx);
+        }
+        bandMagnitudes[bandIdx].push_back(fftData[i]);
+    }
+
+    // Compute contrast per band
+    std::vector<float> contrasts(totalBands, 0.0f);
+    float maxContrast = 0.0f;
+
+    for (int b = 0; b < totalBands; ++b)
+    {
+        auto& mags = bandMagnitudes[b];
+        if (mags.size() < 2)
+        {
+            contrasts[b] = 0.0f;
+            continue;
+        }
+
+        std::sort(mags.begin(), mags.end());
+        int n = static_cast<int>(mags.size());
+        int k = juce::jmax(1, static_cast<int>(n * quantile));
+
+        // peak: mean of top k
+        float peak = 0.0f;
+        for (int i = n - k; i < n; ++i) peak += mags[i];
+        peak /= static_cast<float>(k);
+
+        // valley: mean of bottom k
+        float valley = 0.0f;
+        for (int i = 0; i < k; ++i) valley += mags[i];
+        valley /= static_cast<float>(k);
+
+        float contrast = std::log10(peak + 1e-10f) - std::log10(valley + 1e-10f);
+        contrasts[b] = contrast;
+        maxContrast = juce::jmax(maxContrast, contrast);
+    }
+
+    if (maxContrast < 1e-6f) maxContrast = 1.0f;
+
+    // Map to pixel column
+    float blockHeight = static_cast<float>(imageHeight) / totalBands;
+
+    for (int y = 0; y < imageHeight; ++y)
+    {
+        int bandIdx = static_cast<int>((imageHeight - 1 - y) / blockHeight);
+        bandIdx = juce::jlimit(0, totalBands - 1, bandIdx);
+
+        float normContrast = juce::jlimit(0.0f, 1.0f, contrasts[bandIdx] / maxContrast);
+        float brightness = juce::jlimit(0.0f, 1.0f, normContrast * normFactor);
+        juce::Colour colour = getColourForValue(brightness);
+        spectrogramImage.setPixelAt(x, y, colour);
+        dBColumn[y] = contrasts[bandIdx];
+    }
+}
+
 void SpectrogramComponent::drawReassignedSpectrogram(
     int x, std::vector<float>& dBColumn, int imageHeight, float maxFreq)
 {
@@ -1246,6 +1320,9 @@ void SpectrogramComponent::drawNextLineOfSpectrogram()
         case SpectrogramMode::Chroma:
             drawChroma(x, dBColumn, imageHeight);
             break;
+        case SpectrogramMode::SpectralContrast:
+            drawSpectralContrast(x, dBColumn, imageHeight);
+            break;
         case SpectrogramMode::LinearPlus:
             drawReassignedSpectrogram(x, dBColumn, imageHeight, maxFreq);
             break;
@@ -1338,6 +1415,42 @@ void SpectrogramComponent::paintChromaYAxis(juce::Graphics& g, const int width, 
         g.fillRect(textBounds);
         g.setColour(juce::Colours::white);
         g.drawText(pitchNames[i], textBounds, juce::Justification::left);
+
+        g.setColour(juce::Colours::darkgrey.withAlpha(gridAlpha));
+        g.drawHorizontalLine(y, 55.0f, static_cast<float>(width));
+    }
+}
+
+void SpectrogramComponent::paintSpectralContrastYAxis(juce::Graphics& g, const int width, const int imageHeight)
+{
+    auto fmtHz = [](float hz) -> juce::String
+    {
+        if (hz >= 1000.0f) return juce::String(hz / 1000.0f, 1) + " kHz";
+        return juce::String(static_cast<int>(hz)) + " Hz";
+    };
+
+    const int totalBands = nBands + 1;
+    float blockHeight = static_cast<float>(imageHeight) / totalBands;
+
+    for (int k = 0; k < totalBands; ++k)
+    {
+        int y = static_cast<int>((nBands - k) * blockHeight);
+
+        juce::String label;
+        if (k == 0)
+            label = "0-" + fmtHz(fMinHzContrast);
+        else if (k == nBands)
+            label = fmtHz(fMinHzContrast * std::pow(2.0f, static_cast<float>(nBands - 1))) + "-Nqst";
+        else
+            label = fmtHz(fMinHzContrast * std::pow(2.0f, static_cast<float>(k - 1))) + "-"
+                  + fmtHz(fMinHzContrast * std::pow(2.0f, static_cast<float>(k)));
+
+        juce::Rectangle<int> textBounds(2, y - 8, 90, 16);
+        g.setColour(juce::Colours::black.withAlpha(0.6f));
+        g.fillRect(textBounds);
+        g.setColour(juce::Colours::white);
+        g.setFont(11.0f);
+        g.drawText(label, textBounds, juce::Justification::left);
 
         g.setColour(juce::Colours::darkgrey.withAlpha(gridAlpha));
         g.drawHorizontalLine(y, 55.0f, static_cast<float>(width));
@@ -1615,6 +1728,34 @@ juce::String SpectrogramComponent::drawChromaTooltip(const int dBIndex, const in
     return labelText;
 }
 
+juce::String SpectrogramComponent::drawSpectralContrastTooltip(const int dBIndex, const int imgY, const int imageHeight)
+{
+    auto fmtHz = [](float hz) -> juce::String
+    {
+        if (hz >= 1000.0f) return juce::String(hz / 1000.0f, 1) + " kHz";
+        return juce::String(static_cast<int>(hz)) + " Hz";
+    };
+
+    const int totalBands = nBands + 1;
+    float blockHeight = static_cast<float>(imageHeight) / totalBands;
+    int bandIdx = static_cast<int>((imageHeight - 1 - imgY) / blockHeight);
+    bandIdx = juce::jlimit(0, totalBands - 1, bandIdx);
+
+    float contrastVal = dBBuffer[dBIndex][imgY];
+
+    juce::String bandLabel;
+    if (bandIdx == 0)
+        bandLabel = "0-" + fmtHz(fMinHzContrast);
+    else if (bandIdx == nBands)
+        bandLabel = fmtHz(fMinHzContrast * std::pow(2.0f, static_cast<float>(nBands - 1))) + "-Nqst";
+    else
+        bandLabel = fmtHz(fMinHzContrast * std::pow(2.0f, static_cast<float>(bandIdx - 1))) + "-"
+                  + fmtHz(fMinHzContrast * std::pow(2.0f, static_cast<float>(bandIdx)));
+
+    return "Band " + juce::String(bandIdx) + " (" + bandLabel + "): contrast "
+         + juce::String(contrastVal, 2);
+}
+
 juce::String SpectrogramComponent::drawSTFTTooltip(float dB, const int imgY, float freq)
 {
     // STFT spectrogram
@@ -1709,6 +1850,9 @@ void SpectrogramComponent::paint(juce::Graphics& g)
             break;
         case SpectrogramMode::Chroma:
             paintChromaYAxis(g, width, imageHeight);
+            break;
+        case SpectrogramMode::SpectralContrast:
+            paintSpectralContrastYAxis(g, width, imageHeight);
             break;
         case SpectrogramMode::LinearWithCentroid:
             paintSTFTYAxis(g, width, imageHeight);
@@ -1810,6 +1954,9 @@ void SpectrogramComponent::paint(juce::Graphics& g)
                 break;
             case SpectrogramMode::Chroma:
                 labelText = drawChromaTooltip(dBIndex, imgY, imageHeight);
+                break;
+            case SpectrogramMode::SpectralContrast:
+                labelText = drawSpectralContrastTooltip(dBIndex, imgY, imageHeight);
                 break;
             case SpectrogramMode::LinearWithCentroid:
                 labelText = drawSTFTTooltip(dB, imgY, freq);
