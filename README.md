@@ -37,6 +37,7 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
 - Real-time **Spectral Centroid** tracking to visualize spectral brightness (center of mass of STFT spectrum)
 - Real-time **Chromagram** showing the energy distribution across the 12 pitch classes (C to B), regardless of octave. <span style="color: gray;">[added in v0.5]</span>
 - Real-time **Spectral Contrast** measuring the ratio of spectral peaks to valleys across octave-spaced frequency bands — high contrast indicates clear harmonic/narrow-band signals, low contrast indicates broadband noise. Based on [[10.1109/ICME.2002.1035731](https://doi.org/10.1109/ICME.2002.1035731)]. <span style="color: gray;">[added in v0.15]</span>
+- Real-time **Spectral Flatness** (Wiener entropy): a single scalar per frame measuring how noise-like (close to 1.0) vs tone-like (close to 0.0) a sound is. Rendered as a height-proportional filled area chart with semantic tooltip. <span style="color: gray;">[added in v0.16]</span>
 - **Time-Frequency Reassignment** mode (Linear+) for enhanced STFT resolution, based on the paper [[hal-00414583: Time-Frequency reassignment: from principles to algorithms](https://hal.science/hal-00414583/document)]. This mode sharpens the localization of spectral peaks by reassigning energy to more accurate time-frequency coordinates, making harmonic structures and transient details clearer compared to the standard STFT. <span style="color: gray;">[added in v0.6]</span>
 - **Time-Frequency Reassigned Mel Spectrogram** mode (Mel+) - Mel-scaled display using the same time-frequency reassignment principle as Linear+. It computes the reassigned frequency from the complex STFT and then projects energy onto the Mel axis, yielding sharper harmonic ridges and crisper transients than a standard Mel spectrogram. <span style="color: gray;">[added in v0.7]</span>
 - Real-time **Fourier Tempogram (with Tempo Line)** - Rhythm/tempo map in the BPM (frequency) domain with a dynamic tempo track, based on [[10.1109/ICASSP.2010.5495219](https://doi.org/10.1109/ICASSP.2010.5495219)]. <span style="color: gray;">[added in v0.10]</span>
@@ -245,6 +246,37 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
   </tr>
 </table>
 
+<table style="table-layout: fixed; width: 100%;">
+  <tr>
+    <td align="center" valign="top">
+      <img src="_pics/gui_spectral_flatness.png" width="100%" alt="blank" />
+      <br/>
+      <sub>
+        <strong>Spectral Flatness:</strong>
+        <i>
+          Per-frame Wiener entropy visualized as a height-proportional filled area chart — fill height = flatness value. Warm colors indicate high flatness (noise-like), cool colors indicate low flatness (tonal). Y-axis: Tonal (0.0) to Noisy (1.0). <span style="color: gray;">[added in v0.16]</span>
+        </i>
+      </sub>
+    </td>
+    <td align="center" valign="top">
+      <br/>
+      <sub>
+        <strong></strong>
+        <i>
+        </i>
+      </sub>
+    </td>
+    <td align="center" valign="top">
+      <br/>
+      <sub>
+        <strong></strong>
+        <i>
+        </i>
+      </sub>
+    </td>
+  </tr>
+</table>
+
 [Back to top ↥](#perceptomap)
 
 ## Roadmap
@@ -264,7 +296,7 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
 | Autocorrelation Tempogram | ✅ Done (v0.12) | Time-lag periodicity map (tempo strength over time, mapped to BPM) with dynamic Tempo Line, robust to local phase, naturally highlights double/half-time relationships | Similar to the Fourier Tempogram, but computed via windowed autocorrelation of the onset/novelty signal. The AutoCorrelation Function (ACF) is normalized by the zero-lag term; the BPM axis is log-spaced, and a per-frame log-normal prior guides peak picking to draw the Tempo Line. Note: entering this mode auto-sets FFT size to 2048 for improved temporal resolution. |
 | Global Preset Slots | ✅ Done (v0.13) | Simple global preset management for frequently used visualization configurations | Three editable preset slots stored globally (shared across projects and DAWs). Presets can be overwritten via the Save button; switching presets immediately applies the stored configuration. Presets are persisted as a human-readable XML file, allowing manual inspection and editing by advanced users. |
 | Spectral Contrast | ✅ Done (v0.15) | Octave-band spectral contrast: ratio of spectral peaks to valleys per frequency band | Divides FFT magnitude bins into `nBands+1` octave-spaced frequency bands (first band: [0, `fmin`=200 Hz], then octave doublings: [200, 400], [400, 800], … up to Nyquist). Per band: sorts magnitudes, computes peak (mean of top `quantile`=2%) and valley (mean of bottom 2%); contrast = `log10(peak) − log10(valley)`, normalized to [0,1] for display. Follows the librosa convention (direct log difference) rather than the paper's original `ln(1+peak)−ln(1+valley)` formulation. Based on [[10.1109/ICME.2002.1035731](https://doi.org/10.1109/ICME.2002.1035731)]. |
-| Spectral Flatness | ⏳ Planned | Wiener entropy per frame: geometric mean / arithmetic mean of spectrum | - |
+| Spectral Flatness | ✅ Done (v0.16) | Wiener entropy per frame: geometric mean / arithmetic mean of spectrum, measuring how noise-like vs tone-like a sound is | Computed in log-domain for numerical stability: `flatness = exp(mean(log(mags+eps))) / mean(mags)`. DC bin skipped (`i=1`). Silence guard returns `0.0`. Rendered as height-proportional filled area chart. |
 | Spectral Rolloff | ⏳ Planned | Frequency threshold below which X% of total spectral energy is contained | - |
 | Onset Detection Markers | ⏳ Planned | Transient markers overlaid on spectrogram | - |
 | Constant-Q Transform (CQT) Spectrogram | ⏳ Planned | Log-spaced, pitch-aligned filterbank replacing FFT | - |
