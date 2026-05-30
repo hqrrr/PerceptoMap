@@ -726,6 +726,59 @@ void SpectrogramComponent::drawSpectralContrast(int x, std::vector<float>& dBCol
     }
 }
 
+void SpectrogramComponent::drawSpectralFlatness(int x, std::vector<float>& dBColumn, int imageHeight)
+{
+    const int nBins = fftSize / 2;
+
+    // Compute spectral flatness (Wiener entropy) from magnitude spectrum
+    float sumLog = 0.0f;
+    float sumLin = 0.0f;
+
+    for (int i = 1; i < nBins; ++i)
+    {
+        const float m = fftData[i];
+        sumLog += logf(m + 1e-10f);
+        sumLin += m;
+    }
+
+    const int count = nBins - 1;
+    float flatness;
+
+    // Guard against silence
+    if (sumLin < 1e-20f)
+    {
+        flatness = 0.0f;
+    }
+    else
+    {
+        const float geometricMean = expf(sumLog / count);
+        const float arithmeticMean = sumLin / count;
+        flatness = geometricMean / arithmeticMean;
+    }
+
+    // Clamp to valid range
+    flatness = juce::jlimit(0.0f, 1.0f, flatness);
+
+    // Render height-proportional filled area
+    for (int y = 0; y < imageHeight; ++y)
+    {
+        const float valueFromBottom = 1.0f - (float)y / (imageHeight - 1);
+
+        if (valueFromBottom <= flatness)
+        {
+            const float brightness = juce::jlimit(0.0f, 1.0f, flatness * normFactor);
+            const juce::Colour colour = getColourForValue(brightness);
+            spectrogramImage.setPixelAt(x, y, colour);
+        }
+        else
+        {
+            spectrogramImage.setPixelAt(x, y, juce::Colours::black);
+        }
+
+        dBColumn[y] = flatness;
+    }
+}
+
 void SpectrogramComponent::drawReassignedSpectrogram(
     int x, std::vector<float>& dBColumn, int imageHeight, float maxFreq)
 {
@@ -1323,6 +1376,9 @@ void SpectrogramComponent::drawNextLineOfSpectrogram()
         case SpectrogramMode::SpectralContrast:
             drawSpectralContrast(x, dBColumn, imageHeight);
             break;
+        case SpectrogramMode::SpectralFlatness:
+            drawSpectralFlatness(x, dBColumn, imageHeight);
+            break;
         case SpectrogramMode::LinearPlus:
             drawReassignedSpectrogram(x, dBColumn, imageHeight, maxFreq);
             break;
@@ -1454,6 +1510,29 @@ void SpectrogramComponent::paintSpectralContrastYAxis(juce::Graphics& g, const i
 
         g.setColour(juce::Colours::darkgrey.withAlpha(gridAlpha));
         g.drawHorizontalLine(y, 55.0f, static_cast<float>(width));
+    }
+}
+
+void SpectrogramComponent::paintSpectralFlatnessYAxis(juce::Graphics& g, int width, int imageHeight)
+{
+    struct Label { juce::String text; int y; };
+    std::array<Label, 3> labels = {{
+        { "Noisy", 20 },
+        { "0.5",   imageHeight / 2 },
+        { "Tonal", imageHeight - 20 }
+    }};
+
+    for (auto& label : labels)
+    {
+        juce::Rectangle<int> textBounds(2, label.y - 8, 90, 16);
+        g.setColour(juce::Colours::black.withAlpha(0.6f));
+        g.fillRect(textBounds);
+        g.setColour(juce::Colours::white);
+        g.setFont(11.0f);
+        g.drawText(label.text, textBounds, juce::Justification::left);
+
+        g.setColour(juce::Colours::darkgrey.withAlpha(gridAlpha));
+        g.drawHorizontalLine(label.y, 55.0f, static_cast<float>(width));
     }
 }
 
@@ -1756,6 +1835,31 @@ juce::String SpectrogramComponent::drawSpectralContrastTooltip(const int dBIndex
          + juce::String(contrastVal, 2);
 }
 
+juce::String SpectrogramComponent::drawSpectralFlatnessTooltip(const int dBIndex, const int imgY, const int imageHeight)
+{
+    if (dBIndex < 0 || dBIndex >= (int)dBBuffer.size())
+        return {};
+    const auto& col = dBBuffer[dBIndex];
+    if (imgY < 0 || imgY >= (int)col.size())
+        return {};
+
+    const float flatness = col[imgY];
+
+    juce::String semantic;
+    if (flatness < 0.2f)
+        semantic = "Tonal";
+    else if (flatness < 0.4f)
+        semantic = "Moderately tonal";
+    else if (flatness < 0.6f)
+        semantic = "Balanced";
+    else if (flatness < 0.8f)
+        semantic = "Moderately noisy";
+    else
+        semantic = "Noisy";
+
+    return "Flatness: " + juce::String(flatness, 2) + "  |  " + semantic;
+}
+
 juce::String SpectrogramComponent::drawSTFTTooltip(float dB, const int imgY, float freq)
 {
     // STFT spectrogram
@@ -1853,6 +1957,9 @@ void SpectrogramComponent::paint(juce::Graphics& g)
             break;
         case SpectrogramMode::SpectralContrast:
             paintSpectralContrastYAxis(g, width, imageHeight);
+            break;
+        case SpectrogramMode::SpectralFlatness:
+            paintSpectralFlatnessYAxis(g, width, imageHeight);
             break;
         case SpectrogramMode::LinearWithCentroid:
             paintSTFTYAxis(g, width, imageHeight);
@@ -1957,6 +2064,9 @@ void SpectrogramComponent::paint(juce::Graphics& g)
                 break;
             case SpectrogramMode::SpectralContrast:
                 labelText = drawSpectralContrastTooltip(dBIndex, imgY, imageHeight);
+                break;
+            case SpectrogramMode::SpectralFlatness:
+                labelText = drawSpectralFlatnessTooltip(dBIndex, imgY, imageHeight);
                 break;
             case SpectrogramMode::LinearWithCentroid:
                 labelText = drawSTFTTooltip(dB, imgY, freq);

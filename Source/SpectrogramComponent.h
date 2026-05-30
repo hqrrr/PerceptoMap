@@ -39,7 +39,8 @@ public:
         MelPlus,
         FourierTempogram,
         AutoTempogram,
-        SpectralContrast
+        SpectralContrast,
+        SpectralFlatness,
         // TODO: add Rhythm, etc.
     };
 
@@ -152,6 +153,7 @@ private:
     void paintMFCCYAxis(juce::Graphics& g, const int width, const int imageHeight);
     void paintChromaYAxis(juce::Graphics& g, const int width, const int imageHeight);
     void paintSpectralContrastYAxis(juce::Graphics& g, const int width, const int imageHeight);
+    void paintSpectralFlatnessYAxis(juce::Graphics& g, int width, int imageHeight);
     void paintSTFTYAxis(juce::Graphics& g, const int width, const int imageHeight);
     // y axis frequency range
     float minFreqHz = 30.0f;
@@ -171,6 +173,7 @@ private:
     void drawLinearWithCentroid(int x, std::vector<float>& dBColumn, const int imageHeight, const float maxFreq);
     void drawChroma(int x, std::vector<float>& dBColumn, const int imageHeight);
     void drawSpectralContrast(int x, std::vector<float>& dBColumn, const int imageHeight);
+    void drawSpectralFlatness(int x, std::vector<float>& dBColumn, int imageHeight);
     void drawReassignedSpectrogram(int x, std::vector<float>& dBColumn, const int imageHeight, const float maxFreq);
     void drawReassignedMelSpectrogram(int x, std::vector<float>& dBColumn, int imageHeight);
     // draw Fourier Tempogram
@@ -191,6 +194,7 @@ private:
     juce::String drawMFCCTooltip(float dB, const int imgY, const int imageHeight);
     juce::String drawChromaTooltip(const int dBIndex, const int imgY, const int imageHeight);
     juce::String drawSpectralContrastTooltip(const int dBIndex, const int imgY, const int imageHeight);
+    juce::String drawSpectralFlatnessTooltip(const int dBIndex, const int imgY, const int imageHeight);
     juce::String drawSTFTTooltip(float dB, const int imgY, float freq);
     juce::String drawTempogramTooltip(float dB, const int imgY, const int imageHeight);
 

@@ -237,6 +237,7 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
     spectrogramModeBox.addItem("MFCC", static_cast<int>(SpectrogramComponent::SpectrogramMode::MFCC));
     spectrogramModeBox.addItem("Spectral Centroid", static_cast<int>(SpectrogramComponent::SpectrogramMode::LinearWithCentroid));
     spectrogramModeBox.addItem("Spectral Contrast", static_cast<int>(SpectrogramComponent::SpectrogramMode::SpectralContrast));
+    spectrogramModeBox.addItem("Spectral Flatness", static_cast<int>(SpectrogramComponent::SpectrogramMode::SpectralFlatness));
     spectrogramModeBox.addItem("Chroma", static_cast<int>(SpectrogramComponent::SpectrogramMode::Chroma));
     spectrogramModeBox.addItem("Fourier Tempogram", static_cast<int>(SpectrogramComponent::SpectrogramMode::FourierTempogram));
     spectrogramModeBox.addItem("Autocorr Tempogram", static_cast<int>(SpectrogramComponent::SpectrogramMode::AutoTempogram));
@@ -544,6 +545,18 @@ void SpectrogramAudioProcessorEditor::MenuDisableControl(SpectrogramComponent::S
             tempoAvgResetBtn.setVisible(false);
             break;
         }
+        // Spectral Flatness
+        case SpectrogramComponent::SpectrogramMode::SpectralFlatness:
+        {
+            logScaleBox.setEnabled(false);
+            yRangeSlider.setEnabled(false);
+            yMinHzEdit.setEnabled(false);
+            yMaxHzEdit.setEnabled(false);
+            floorDbSlider.setEnabled(true);
+            noteAxisToggle.setEnabled(false);
+            tempoAvgResetBtn.setVisible(false);
+            break;
+        }
         // Fourier Tempogram
         case SpectrogramComponent::SpectrogramMode::FourierTempogram:
         {
@@ -619,7 +632,9 @@ void SpectrogramAudioProcessorEditor::paint(juce::Graphics& g)
         g.setFont(12.0f);
 
         if (spectrogram.getCurrentMode() == SpectrogramComponent::SpectrogramMode::MFCC ||
-            spectrogram.getCurrentMode() == SpectrogramComponent::SpectrogramMode::Chroma)
+            spectrogram.getCurrentMode() == SpectrogramComponent::SpectrogramMode::Chroma ||
+            spectrogram.getCurrentMode() == SpectrogramComponent::SpectrogramMode::SpectralContrast ||
+            spectrogram.getCurrentMode() == SpectrogramComponent::SpectrogramMode::SpectralFlatness)
         {
             // normalized legend label for MFCC and Chromagram [0, 1]
             g.drawText("0.0", legendX - 50, legendY, 45, legendImage.getHeight(), juce::Justification::right);
