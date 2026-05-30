@@ -229,6 +229,8 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
         "- Chroma: Chromagram showing the energy distribution across the 12 pitch classes (C to B), regardless of octave. Useful for analyzing harmonic content and key.\n"
         "- Fourier Tempogram: Tempo (BPM) energy vs. time computed from the onset envelope via STFT, overlays a dynamic tempo line (peak per frame with log-normal prior). Tip: Use a higher FFT size like 4096.\n"
         "- Autocorr Tempogram: Tempo (BPM) vs. time via autocorrelation of the onset envelope. More robust to local phase than Fourier Tempogram.\n"
+        "- Spectral Contrast: Octave-band spectral contrast showing the ratio of spectral peaks to valleys in each frequency band. Bright bands indicate strong harmonic content; dark bands indicate noise-like spectra.\n"
+        "- Spectral Flatness: Per-frame Wiener entropy (tonality coefficient). Measures how noise-like (close to 1.0) vs tone-like (close to 0.0) a sound is. Rendered as a height-proportional filled area chart.\n"
     );
     spectrogramModeBox.addItem("Linear", static_cast<int>(SpectrogramComponent::SpectrogramMode::Linear));
     spectrogramModeBox.addItem("Linear+", static_cast<int>(SpectrogramComponent::SpectrogramMode::LinearPlus));
