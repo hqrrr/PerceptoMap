@@ -259,6 +259,7 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
       </sub>
     </td>
     <td align="center" valign="top">
+      <img src="_pics/blank_800x630.png" width="100%" alt="blank" />
       <br/>
       <sub>
         <strong></strong>
@@ -267,6 +268,7 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
       </sub>
     </td>
     <td align="center" valign="top">
+      <img src="_pics/blank_800x630.png" width="100%" alt="blank" />
       <br/>
       <sub>
         <strong></strong>
