@@ -231,6 +231,7 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
         "- Autocorr Tempogram: Tempo (BPM) vs. time via autocorrelation of the onset envelope. More robust to local phase than Fourier Tempogram.\n"
         "- Spectral Contrast: Octave-band spectral contrast showing the ratio of spectral peaks to valleys in each frequency band. Bright bands indicate strong harmonic content; dark bands indicate noise-like spectra.\n"
         "- Spectral Flatness: Per-frame Wiener entropy (tonality coefficient). Measures how noise-like (close to 1.0) vs tone-like (close to 0.0) a sound is. Rendered as a height-proportional filled area chart.\n"
+        "- Spectral Rolloff: Cumulative energy threshold curves (R25/R50/R85/R95) overlaid on STFT spectrogram.\n"
     );
     spectrogramModeBox.addItem("Linear", static_cast<int>(SpectrogramComponent::SpectrogramMode::Linear));
     spectrogramModeBox.addItem("Linear+", static_cast<int>(SpectrogramComponent::SpectrogramMode::LinearPlus));
@@ -240,6 +241,7 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
     spectrogramModeBox.addItem("Spectral Centroid", static_cast<int>(SpectrogramComponent::SpectrogramMode::LinearWithCentroid));
     spectrogramModeBox.addItem("Spectral Contrast", static_cast<int>(SpectrogramComponent::SpectrogramMode::SpectralContrast));
     spectrogramModeBox.addItem("Spectral Flatness", static_cast<int>(SpectrogramComponent::SpectrogramMode::SpectralFlatness));
+    spectrogramModeBox.addItem("Spectral Rolloff", static_cast<int>(SpectrogramComponent::SpectrogramMode::LinearWithRolloff));
     spectrogramModeBox.addItem("Chroma", static_cast<int>(SpectrogramComponent::SpectrogramMode::Chroma));
     spectrogramModeBox.addItem("Fourier Tempogram", static_cast<int>(SpectrogramComponent::SpectrogramMode::FourierTempogram));
     spectrogramModeBox.addItem("Autocorr Tempogram", static_cast<int>(SpectrogramComponent::SpectrogramMode::AutoTempogram));
@@ -474,6 +476,11 @@ SpectrogramAudioProcessorEditor::SpectrogramAudioProcessorEditor(SpectrogramAudi
         pushCurrentToProcessor();
     };
 
+    spectrogram.onRolloffVisibilityChanged = [this]()
+    {
+        pushCurrentToProcessor();
+    };
+
     // reset tempo avg button in Tempogram
     addAndMakeVisible(tempoAvgResetBtn);
     tempoAvgResetBtn.setTooltip("Reset average BPM");
@@ -592,6 +599,8 @@ void SpectrogramAudioProcessorEditor::MenuDisableControl(SpectrogramComponent::S
 
             break;
         }
+        // Spectral Rolloff (falls through to default — same controls as Linear/Linear+)
+        case SpectrogramComponent::SpectrogramMode::LinearWithRolloff:
         // Linear STFT
         default:
             logScaleBox.setEnabled(true);
@@ -709,6 +718,12 @@ SpectrogramAudioProcessor::PresetData SpectrogramAudioProcessorEditor::captureUI
     d.yMaxHz = yRangeSlider.getMaxValue();
 
     d.noteAxis = noteAxisToggle.getToggleState();
+
+    d.rolloffR25Visible = spectrogram.getRolloffCurveVisible(0);
+    d.rolloffR50Visible = spectrogram.getRolloffCurveVisible(1);
+    d.rolloffR85Visible = spectrogram.getRolloffCurveVisible(2);
+    d.rolloffR95Visible = spectrogram.getRolloffCurveVisible(3);
+
     return d;
 }
 
@@ -762,6 +777,11 @@ void SpectrogramAudioProcessorEditor::applyDataToUI(
 
     spectrogram.setFrequencyRangeHz((float)d.yMinHz, (float)d.yMaxHz);
     spectrogram.setShowNoteCAxis(d.noteAxis);
+
+    spectrogram.setRolloffCurveVisible(0, d.rolloffR25Visible);
+    spectrogram.setRolloffCurveVisible(1, d.rolloffR50Visible);
+    spectrogram.setRolloffCurveVisible(2, d.rolloffR85Visible);
+    spectrogram.setRolloffCurveVisible(3, d.rolloffR95Visible);
 
     updateLegendImage();
     repaint();

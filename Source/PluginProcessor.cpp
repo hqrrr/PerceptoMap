@@ -176,6 +176,10 @@ void SpectrogramAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
     state.setProperty("cur_yMinHz", currentSettings.yMinHz, nullptr);
     state.setProperty("cur_yMaxHz", currentSettings.yMaxHz, nullptr);
     state.setProperty("cur_noteAxis", currentSettings.noteAxis, nullptr);
+    state.setProperty("cur_rolloffR25Visible", currentSettings.rolloffR25Visible, nullptr);
+    state.setProperty("cur_rolloffR50Visible", currentSettings.rolloffR50Visible, nullptr);
+    state.setProperty("cur_rolloffR85Visible", currentSettings.rolloffR85Visible, nullptr);
+    state.setProperty("cur_rolloffR95Visible", currentSettings.rolloffR95Visible, nullptr);
 
     juce::MemoryOutputStream mos(destData, true);
     state.writeToStream(mos);
@@ -200,6 +204,10 @@ void SpectrogramAudioProcessor::setStateInformation(const void* data, int sizeIn
     currentSettings.yMinHz = (double)vt.getProperty("cur_yMinHz", currentSettings.yMinHz);
     currentSettings.yMaxHz = (double)vt.getProperty("cur_yMaxHz", currentSettings.yMaxHz);
     currentSettings.noteAxis = (bool)vt.getProperty("cur_noteAxis", currentSettings.noteAxis);
+    currentSettings.rolloffR25Visible = (bool)vt.getProperty("cur_rolloffR25Visible", currentSettings.rolloffR25Visible);
+    currentSettings.rolloffR50Visible = (bool)vt.getProperty("cur_rolloffR50Visible", currentSettings.rolloffR50Visible);
+    currentSettings.rolloffR85Visible = (bool)vt.getProperty("cur_rolloffR85Visible", currentSettings.rolloffR85Visible);
+    currentSettings.rolloffR95Visible = (bool)vt.getProperty("cur_rolloffR95Visible", currentSettings.rolloffR95Visible);
 }
 
 //==============================================================================
@@ -234,6 +242,10 @@ void SpectrogramAudioProcessor::ensurePresetSlots()
         p.setProperty("yMinHz", d.yMinHz, nullptr);
         p.setProperty("yMaxHz", d.yMaxHz, nullptr);
         p.setProperty("noteAxis", d.noteAxis, nullptr);
+        p.setProperty("rolloffR25Visible", d.rolloffR25Visible, nullptr);
+        p.setProperty("rolloffR50Visible", d.rolloffR50Visible, nullptr);
+        p.setProperty("rolloffR85Visible", d.rolloffR85Visible, nullptr);
+        p.setProperty("rolloffR95Visible", d.rolloffR95Visible, nullptr);
         return p;
     };
 
@@ -275,6 +287,11 @@ SpectrogramAudioProcessor::PresetData SpectrogramAudioProcessor::loadPreset(int 
 
     d.noteAxis = (bool)p.getProperty("noteAxis", d.noteAxis);
 
+    d.rolloffR25Visible = (bool)p.getProperty("rolloffR25Visible", d.rolloffR25Visible);
+    d.rolloffR50Visible = (bool)p.getProperty("rolloffR50Visible", d.rolloffR50Visible);
+    d.rolloffR85Visible = (bool)p.getProperty("rolloffR85Visible", d.rolloffR85Visible);
+    d.rolloffR95Visible = (bool)p.getProperty("rolloffR95Visible", d.rolloffR95Visible);
+
     return d;
 }
 
@@ -300,6 +317,10 @@ void SpectrogramAudioProcessor::savePreset(int idx, const PresetData& d)
     p.setProperty("yMinHz", d.yMinHz, nullptr);
     p.setProperty("yMaxHz", d.yMaxHz, nullptr);
     p.setProperty("noteAxis", d.noteAxis, nullptr);
+    p.setProperty("rolloffR25Visible", d.rolloffR25Visible, nullptr);
+    p.setProperty("rolloffR50Visible", d.rolloffR50Visible, nullptr);
+    p.setProperty("rolloffR85Visible", d.rolloffR85Visible, nullptr);
+    p.setProperty("rolloffR95Visible", d.rolloffR95Visible, nullptr);
 
     saveGlobalPresetsToDisk();
 }

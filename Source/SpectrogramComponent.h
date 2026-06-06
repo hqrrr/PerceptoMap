@@ -13,6 +13,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include <array>
 
 class SpectrogramComponent : public juce::Component,
     private juce::Timer
@@ -41,6 +42,7 @@ public:
         AutoTempogram,
         SpectralContrast,
         SpectralFlatness,
+        LinearWithRolloff,
         // TODO: add Rhythm, etc.
     };
 
@@ -96,6 +98,11 @@ public:
     // y note axis
     void setShowNoteCAxis(bool shouldShow);
     bool getShowNoteCAxis() const {return showNoteCAxis;}
+
+    // Spectral rolloff curve visibility
+    void setRolloffCurveVisible(int k, bool v) { if (k >= 0 && k < 4) rolloffCurveVisible[k] = v; }
+    bool getRolloffCurveVisible(int k) const { return (k >= 0 && k < 4) ? rolloffCurveVisible[k] : false; }
+    std::function<void()> onRolloffVisibilityChanged;
 
     // Tempo statistics
     void resetTempoStats();
@@ -171,6 +178,7 @@ private:
     void drawMelSpectrogram(int x, std::vector<float>& dBColumn, const int imageHeight);
     void drawMFCC(int x, std::vector<float>& dBColumn, const int imageHeight);
     void drawLinearWithCentroid(int x, std::vector<float>& dBColumn, const int imageHeight, const float maxFreq);
+    void drawLinearWithRolloff(int x, std::vector<float>& dBColumn, int imageHeight, float maxFreq);
     void drawChroma(int x, std::vector<float>& dBColumn, const int imageHeight);
     void drawSpectralContrast(int x, std::vector<float>& dBColumn, const int imageHeight);
     void drawSpectralFlatness(int x, std::vector<float>& dBColumn, int imageHeight);
@@ -185,10 +193,12 @@ private:
 
     // mouse tooltip
     std::vector<std::vector<float>> dBBuffer;
+    std::vector<std::array<float, 4>> rolloffValueBuffer;
     juce::Point<int> mousePosition;
     bool showMouseCrosshair = false;
     void mouseMove(const juce::MouseEvent& event) override;
     void mouseExit(const juce::MouseEvent& event) override;
+    void mouseDown(const juce::MouseEvent& event) override;
 
     juce::String drawMelTooltip(float dB, const int imgY, float freq);
     juce::String drawMFCCTooltip(float dB, const int imgY, const int imageHeight);
@@ -197,6 +207,7 @@ private:
     juce::String drawSpectralFlatnessTooltip(const int dBIndex, const int imgY, const int imageHeight);
     juce::String drawSTFTTooltip(float dB, const int imgY, float freq);
     juce::String drawTempogramTooltip(float dB, const int imgY, const int imageHeight);
+    juce::String drawRolloffTooltip(const int dBIndex, const int imgY, const int imageHeight);
 
     std::vector<float> melBandFrequencies;
 
@@ -220,6 +231,7 @@ private:
 
     // Spectral centroid
     float computeSpectralCentroid(const float* magnitude, int numBins) const;
+    float computeSpectralRolloff(const float* magnitude, int numBins, float rollPercent) const;
     int lastCentroidY = -1;
     // Exponential Moving Average to smooth the centroid curve
     float centroidSmoothed = 0.0f;
@@ -227,6 +239,13 @@ private:
     // Values of close to 1 have less of a smoothing effect and give greater weight to recent changes in the data, 
     // while values of closer to 0 have a greater smoothing effect and are less responsive to recent changes.
     const float smoothingFactor = 0.3f;
+
+    // Spectral rolloff
+    float rolloffSmoothed[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    bool hasPreviousRolloff[4] = {false, false, false, false};
+    int lastRolloffY[4] = {-1, -1, -1, -1};
+    static constexpr float rolloffPercents[4] = {0.25f, 0.50f, 0.85f, 0.95f};
+    bool rolloffCurveVisible[4] = {true, true, true, true};
 
     // Chromagram
     void buildChromaFilterBank(int fftSize, double sampleRate);

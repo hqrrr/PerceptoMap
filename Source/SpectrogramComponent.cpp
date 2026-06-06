@@ -48,8 +48,6 @@ SpectrogramComponent::SpectrogramComponent()
     // init fourier tempogram
     initFourierTempogram();
 
-    // mouse listener
-    addMouseListener(this, true);
 }
 
 void SpectrogramComponent::setUiFps(int fps)
@@ -91,8 +89,14 @@ void SpectrogramComponent::setFFTOrder(int newOrder)
     lastCentroidY = -1;
     hasPreviousCentroid = false;
     centroidSmoothed = 0.0f;
+    for (int k = 0; k < 4; ++k) {
+        rolloffSmoothed[k] = 0.0f;
+        hasPreviousRolloff[k] = false;
+        lastRolloffY[k] = -1;
+    }
 
     dBBuffer.clear();
+    rolloffValueBuffer.clear();
 
     juce::Graphics g(spectrogramImage);
     g.fillAll(juce::Colours::black);
@@ -289,6 +293,8 @@ void SpectrogramComponent::setColourScheme(ColourScheme scheme)
 
 void SpectrogramComponent::setSpectrogramMode(SpectrogramMode mode)
 {
+    if (mode == SpectrogramMode::LinearWithRolloff && currentMode != mode)
+        rolloffValueBuffer.clear();
     currentMode = mode;
 }
 
@@ -308,6 +314,35 @@ void SpectrogramComponent::mouseExit(const juce::MouseEvent&)
 {
     showMouseCrosshair = false;
     repaint();
+}
+
+void SpectrogramComponent::mouseDown(const juce::MouseEvent& event)
+{
+    if (currentMode != SpectrogramMode::LinearWithRolloff || !showMouseCrosshair)
+        return;
+    
+    // Recompute legend position (same formula as in paint())
+    const int boxWidth = 320;
+    const int boxHeight = 20;
+    const int padding = 5;
+    const int boxX = getWidth() - boxWidth - padding - 6;
+    const int boxY = padding;
+    const int legendX = boxX;
+    const int legendY = boxY + boxHeight + 8;
+    
+    for (int k = 0; k < 4; ++k)
+    {
+        const int y = legendY + 14 + k * 14;
+        const juce::Rectangle<int> checkbox(legendX + 5, y - 5, 10, 10);
+        if (checkbox.contains(event.getPosition()))
+        {
+            rolloffCurveVisible[k] = !rolloffCurveVisible[k];
+            repaint();
+            if (onRolloffVisibilityChanged)
+                onRolloffVisibilityChanged();
+            return;
+        }
+    }
 }
 
 int SpectrogramComponent::hzToY(float hz) const
@@ -599,6 +634,103 @@ void SpectrogramComponent::drawLinearWithCentroid(int x, std::vector<float>& dBC
     }
 
     lastCentroidY = centroidY;
+}
+
+void SpectrogramComponent::drawLinearWithRolloff(int x, std::vector<float>& dBColumn, const int imageHeight, const float maxFreq)
+{
+    for (int k = 0; k < 4; ++k)
+    {
+        float rawHz = computeSpectralRolloff(fftData.data(), fftSize / 2, rolloffPercents[k]);
+
+        if (!hasPreviousRolloff[k] || rawHz <= 0.0f || rawHz > maxFreq)
+        {
+            rolloffSmoothed[k] = rawHz;
+            hasPreviousRolloff[k] = true;
+        }
+        else
+        {
+            rolloffSmoothed[k] += smoothingFactor * (rawHz - rolloffSmoothed[k]);
+        }
+    }
+
+    // Draw STFT background once
+    SpectrogramComponent::drawLinearSpectrogram(x, dBColumn, imageHeight, maxFreq);
+
+    auto mapHzToY = [imageHeight, this](float freqHz) -> int
+    {
+        freqHz = juce::jlimit(minFreqHz, maxFreqHz, freqHz);
+        float yNorm = 0.0f;
+        if (useLogFrequency)
+        {
+            const float logMin = std::log10(std::max(1.0f, minFreqHz));
+            const float logMax = std::log10(std::max(minFreqHz + 1.0f, maxFreqHz));
+            const float logF = std::log10(std::max(1.0f, freqHz));
+            yNorm = 1.0f - (logF - logMin) / (logMax - logMin);
+        }
+        else
+        {
+            yNorm = 1.0f - (freqHz - minFreqHz) / (maxFreqHz - minFreqHz);
+        }
+        return juce::jlimit(0, imageHeight - 1, static_cast<int>(yNorm * imageHeight));
+    };
+
+    for (int k = 0; k < 4; ++k)
+    {
+        if (!rolloffCurveVisible[k])
+            continue;
+
+        int y = mapHzToY(rolloffSmoothed[k]);
+
+        juce::Colour curveColour;
+        float alpha = 1.0f;
+
+        if (colourScheme == ColourScheme::Magma || colourScheme == ColourScheme::MagmaEnhanced)
+        {
+            alpha = 0.95f;
+            switch (k)
+            {
+            case 0: curveColour = juce::Colour::fromRGB(0xFF, 0x66, 0x66); break;
+            case 1: curveColour = juce::Colour::fromRGB(0xFF, 0xAA, 0x44); break;
+            case 2: curveColour = juce::Colour::fromRGB(0x00, 0xCC, 0xCC); break;
+            case 3: curveColour = juce::Colour::fromRGB(0x44, 0x88, 0xFF); break;
+            }
+        }
+        else
+        {
+            switch (k)
+            {
+            case 0: curveColour = juce::Colour::fromRGB(0xFF, 0x44, 0x44); break;
+            case 1: curveColour = juce::Colour::fromRGB(0xFF, 0x88, 0x00); break;
+            case 2: curveColour = juce::Colour::fromRGB(0x00, 0xCC, 0xCC); break;
+            case 3: curveColour = juce::Colour::fromRGB(0x44, 0x88, 0xFF); break;
+            }
+        }
+
+        if (lastRolloffY[k] >= 0)
+        {
+            juce::Graphics g(spectrogramImage);
+            g.setColour(curveColour.withAlpha(alpha));
+            g.drawLine((float)(x - 1), (float)lastRolloffY[k],
+                       (float)x, (float)y,
+                       2.0f);
+        }
+        else
+        {
+            // First frame: draw a 3-pixel vertical dot
+            for (int dy = -1; dy <= 1; ++dy)
+            {
+                int py = juce::jlimit(0, imageHeight - 1, y + dy);
+                spectrogramImage.setPixelAt(x, py, curveColour.withAlpha(alpha));
+            }
+        }
+
+        lastRolloffY[k] = y;
+    }
+
+    const int imageWidth = spectrogramImage.getWidth();
+    if ((int)rolloffValueBuffer.size() >= imageWidth)
+        rolloffValueBuffer.erase(rolloffValueBuffer.begin());
+    rolloffValueBuffer.push_back({rolloffSmoothed[0], rolloffSmoothed[1], rolloffSmoothed[2], rolloffSmoothed[3]});
 }
 
 void SpectrogramComponent::drawChroma(int x, std::vector<float>& dBColumn, const int imageHeight)
@@ -1379,6 +1511,9 @@ void SpectrogramComponent::drawNextLineOfSpectrogram()
         case SpectrogramMode::SpectralFlatness:
             drawSpectralFlatness(x, dBColumn, imageHeight);
             break;
+        case SpectrogramMode::LinearWithRolloff:
+            drawLinearWithRolloff(x, dBColumn, imageHeight, maxFreq);
+            break;
         case SpectrogramMode::LinearPlus:
             drawReassignedSpectrogram(x, dBColumn, imageHeight, maxFreq);
             break;
@@ -1908,6 +2043,17 @@ juce::String SpectrogramComponent::drawSTFTTooltip(float dB, const int imgY, flo
     return labelText;
 }
 
+juce::String SpectrogramComponent::drawRolloffTooltip(const int dBIndex, const int /*imgY*/, const int /*imageHeight*/)
+{
+    if (dBIndex < 0 || dBIndex >= (int)rolloffValueBuffer.size())
+        return {};
+    const auto& rv = rolloffValueBuffer[dBIndex];
+    return "R25:" + juce::String(rv[0], 0) + " Hz  "
+         + "R50:" + juce::String(rv[1], 0) + " Hz  "
+         + "R85:" + juce::String(rv[2], 0) + " Hz  "
+         + "R95:" + juce::String(rv[3], 0) + " Hz";
+}
+
 juce::String SpectrogramComponent::drawTempogramTooltip(float dB, const int imgY, const int imageHeight)
 {
     if (imageHeight <= 1 || tempoMaxBPM <= tempoMinBPM)
@@ -1964,6 +2110,9 @@ void SpectrogramComponent::paint(juce::Graphics& g)
         case SpectrogramMode::LinearWithCentroid:
             paintSTFTYAxis(g, width, imageHeight);
             break;
+        case SpectrogramMode::LinearWithRolloff:
+            paintSTFTYAxis(g, width, imageHeight);
+            break;
         case SpectrogramMode::LinearPlus:
             paintSTFTYAxis(g, width, imageHeight);
             break;
@@ -1985,7 +2134,8 @@ void SpectrogramComponent::paint(juce::Graphics& g)
         (currentMode == SpectrogramMode::LinearPlus) ||
         (currentMode == SpectrogramMode::LinearWithCentroid) ||
         (currentMode == SpectrogramMode::Mel) ||
-        (currentMode == SpectrogramMode::MelPlus);
+        (currentMode == SpectrogramMode::MelPlus) ||
+        (currentMode == SpectrogramMode::LinearWithRolloff);
     if (showNoteCAxis)
     {
         paintNoteYAxis(g, modeSupportsNoteAxis);
@@ -2071,6 +2221,9 @@ void SpectrogramComponent::paint(juce::Graphics& g)
             case SpectrogramMode::LinearWithCentroid:
                 labelText = drawSTFTTooltip(dB, imgY, freq);
                 break;
+            case SpectrogramMode::LinearWithRolloff:
+                labelText = drawSTFTTooltip(dB, imgY, freq);
+                break;
             case SpectrogramMode::LinearPlus:
                 labelText = drawSTFTTooltip(dB, imgY, freq);
                 break;
@@ -2087,7 +2240,7 @@ void SpectrogramComponent::paint(juce::Graphics& g)
         }
 
         // Draw fixed box under legend bar (top right)
-        const int boxWidth = 240;
+        const int boxWidth = 320;
         const int boxHeight = 20;
         const int padding = 5;
 
@@ -2100,6 +2253,52 @@ void SpectrogramComponent::paint(juce::Graphics& g)
         g.setColour(juce::Colours::white);
         g.setFont(12.0f);
         g.drawText(labelText, boxX, boxY, boxWidth, boxHeight, juce::Justification::centredLeft);
+
+        if (currentMode == SpectrogramMode::LinearWithRolloff)
+        {
+            const int legendX = boxX;
+            const int legendY = boxY + boxHeight + 8;
+            const int legendW = 150;
+            const int legendH = 70;
+
+            g.setColour(juce::Colours::black.withAlpha(0.5f));
+            g.fillRoundedRectangle((float)legendX, (float)legendY, (float)legendW, (float)legendH, 4.0f);
+
+            const char* labels[4] = { "R25", "R50", "R85", "R95" };
+            juce::Colour legendColors[4] = {
+                juce::Colour::fromRGB(0xFF, 0x44, 0x44),
+                juce::Colour::fromRGB(0xFF, 0x88, 0x00),
+                juce::Colour::fromRGB(0x00, 0xCC, 0xCC),
+                juce::Colour::fromRGB(0x44, 0x88, 0xFF)
+            };
+
+            if (colourScheme == ColourScheme::Magma || colourScheme == ColourScheme::MagmaEnhanced)
+            {
+                legendColors[0] = juce::Colour::fromRGB(0xFF, 0x66, 0x66);
+                legendColors[1] = juce::Colour::fromRGB(0xFF, 0xAA, 0x44);
+            }
+
+            for (int k = 0; k < 4; ++k)
+            {
+                const int y = legendY + 14 + k * 14;
+
+                // Draw checkbox square
+                juce::Rectangle<int> checkbox(legendX + 5, y - 5, 10, 10);
+                g.setColour(legendColors[k].withAlpha(0.6f));
+                g.drawRect(checkbox, 1.0f);
+                if (rolloffCurveVisible[k])
+                    g.fillRect(checkbox.reduced(2));
+
+                // Draw colored line indicator
+                g.setColour(legendColors[k]);
+                g.drawLine((float)(legendX + 20), (float)(y + 2), (float)(legendX + 38), (float)(y + 2), 2.0f);
+
+                // Draw label text
+                g.setColour(juce::Colours::white);
+                g.setFont(11.0f);
+                g.drawText(labels[k], legendX + 44, y - 6, 90, 16, juce::Justification::centredLeft, false);
+            }
+        }
     }
 }
 
@@ -2127,6 +2326,39 @@ float SpectrogramComponent::computeSpectralCentroid(const float* magnitude, int 
     float centroid = (energySum > 0.0f) ? weightedSum / energySum : 0.0f;
 
     return centroid;
+}
+
+float SpectrogramComponent::computeSpectralRolloff(const float* magnitude, int numBins, float rollPercent) const
+{
+    // Compute total power excluding DC bin (i=0), matching librosa convention
+    float totalPower = 0.0f;
+    for (int i = 1; i < numBins; ++i)
+        totalPower += magnitude[i] * magnitude[i];
+
+    if (totalPower < 1e-6f)
+        return 0.0f;
+
+    float threshold = rollPercent * totalPower;
+    float cumulative = 0.0f;
+    float binWidth = sampleRate / fftSize;
+
+    for (int i = 1; i < numBins; ++i)
+    {
+        float binPower = magnitude[i] * magnitude[i];
+        float cumBefore = cumulative;
+        cumulative += binPower;
+
+        if (cumulative >= threshold)
+        {
+            float excess = threshold - cumBefore;
+            float frac = (binPower > 1e-12f) ? excess / binPower : 0.0f;
+            float rolloffFreq = (i - 1) * binWidth + frac * binWidth;
+            return rolloffFreq;
+        }
+    }
+
+    // Edge case: should not reach here, return Nyquist
+    return (numBins - 1) * binWidth;
 }
 
 // Chromagram filter bank

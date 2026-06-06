@@ -43,6 +43,10 @@ public:
         double yMaxHz = 22050.0;
 
         bool noteAxis = false;
+        bool rolloffR25Visible = true;
+        bool rolloffR50Visible = true;
+        bool rolloffR85Visible = true;
+        bool rolloffR95Visible = true;
     };
 
     //==============================================================================
