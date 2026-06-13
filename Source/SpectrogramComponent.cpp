@@ -48,6 +48,8 @@ SpectrogramComponent::SpectrogramComponent()
     // init fourier tempogram
     initFourierTempogram();
 
+    // init onset buffer
+    initOnsetBuffer();
 }
 
 void SpectrogramComponent::setUiFps(int fps)
@@ -107,6 +109,9 @@ void SpectrogramComponent::setFFTOrder(int newOrder)
     // init fourier tempogram
     initFourierTempogram();
 
+    // init onset buffer
+    initOnsetBuffer();
+
     repaint();
 }
 
@@ -136,6 +141,9 @@ void SpectrogramComponent::setOverlap(int newOverlap)
 
     // init fourier tempogram
     initFourierTempogram();
+
+    // init onset buffer
+    initOnsetBuffer();
 }
 
 void SpectrogramComponent::setScrollSpeedMultiplier(int mulX)
@@ -229,7 +237,8 @@ void SpectrogramComponent::pushNextFFTBlock(const float* data, size_t numSamples
             // Fourier tempogram / Autocorrelation tempogram
             // compute spectral flux novelty and push into novelty ring buffer
             if (currentMode == SpectrogramMode::FourierTempogram 
-                || currentMode == SpectrogramMode::AutoTempogram)
+                || currentMode == SpectrogramMode::AutoTempogram
+                || currentMode == SpectrogramMode::OnsetMarkers)
             {
                 // current magnitude spectrum in [0 ... fftSize/2)
                 const int nBins = fftSize / 2;
@@ -249,11 +258,30 @@ void SpectrogramComponent::pushNextFFTBlock(const float* data, size_t numSamples
 
                 //for (int k = 0; k < nBins; ++k) lastMagSpec[k] = fftData[k];
 
-                // Write to buffer
-                if (!noveltyRing.empty())
+                // Write to novelty buffer (Tempogram modes only — OnsetMarkers uses onsetBuffer)
+                if (currentMode == SpectrogramMode::FourierTempogram
+                    || currentMode == SpectrogramMode::AutoTempogram)
                 {
-                    noveltyRing[noveltyWrite] = flux;
-                    noveltyWrite = (noveltyWrite + 1) % noveltyRing.size();
+                    if (!noveltyRing.empty())
+                    {
+                        noveltyRing[noveltyWrite] = flux;
+                        noveltyWrite = (noveltyWrite + 1) % noveltyRing.size();
+                    }
+                }
+
+                if (currentMode == SpectrogramMode::OnsetMarkers)
+                {
+                    if (!onsetBuffer.empty())
+                    {
+                        onsetBuffer[onsetWrite] = flux;
+                        onsetWrite = (onsetWrite + 1) % onsetBuffer.size();
+                        onsetFrameCounter++;
+                        if (flux < onsetRunMin) onsetRunMin = flux;
+                        if (flux > onsetRunMax) onsetRunMax = flux;
+
+                        if (detectOnset())
+                            pendingOnset = true;
+                    }
                 }
             }
 
@@ -279,6 +307,9 @@ void SpectrogramComponent::setSampleRate(double newSampleRate)
 
     // init fourier tempogram
     initFourierTempogram();
+
+    // init onset buffer
+    initOnsetBuffer();
 }
 
 void SpectrogramComponent::setUseLogFrequency(bool shouldUseLog)
@@ -295,6 +326,19 @@ void SpectrogramComponent::setSpectrogramMode(SpectrogramMode mode)
 {
     if (mode == SpectrogramMode::LinearWithRolloff && currentMode != mode)
         rolloffValueBuffer.clear();
+
+    if (mode == SpectrogramMode::OnsetMarkers)
+    {
+        onsetFrameCounter = 0;
+        onsetRunMin = std::numeric_limits<float>::max();
+        onsetRunMax = 0.0f;
+        lastOnsetFrame = -100;
+        onsetDetected.assign(spectrogramImage.getWidth(), 0.0f);
+        pendingOnset = false;
+        lastCompSpec.assign(fftSize / 2, 0.0f);
+        haveLastMag = false;
+    }
+
     currentMode = mode;
 }
 
@@ -350,6 +394,7 @@ int SpectrogramComponent::hzToY(float hz) const
     const int imageHeight = spectrogramImage.isValid() ? spectrogramImage.getHeight() : getHeight();
     if (imageHeight <= 0) return 0;
 
+    // OnsetMarkers uses Linear STFT axis, no special handling needed here
     if (currentMode == SpectrogramMode::Mel || currentMode == SpectrogramMode::MelPlus)
     {
         const float maxHz = static_cast<float>(sampleRate) * 0.5f;
@@ -731,6 +776,23 @@ void SpectrogramComponent::drawLinearWithRolloff(int x, std::vector<float>& dBCo
     if ((int)rolloffValueBuffer.size() >= imageWidth)
         rolloffValueBuffer.erase(rolloffValueBuffer.begin());
     rolloffValueBuffer.push_back({rolloffSmoothed[0], rolloffSmoothed[1], rolloffSmoothed[2], rolloffSmoothed[3]});
+}
+
+void SpectrogramComponent::drawOnsetMarkers(int x, std::vector<float>& dBColumn, const int imageHeight, const float maxFreq)
+{
+    drawLinearSpectrogram(x, dBColumn, imageHeight, maxFreq);
+
+    if (!onsetDetected.empty() && x >= 0 && x < (int)onsetDetected.size())
+    {
+        if (onsetDetected[(size_t)x] > 0.5f)
+        {
+            juce::Graphics g(spectrogramImage);
+            g.setColour(juce::Colour::fromRGB(0, 150, 150));
+            float dashPattern[2] = { 8.0f, 8.0f };
+            juce::Line<float> line((float)x, 0.0f, (float)x, (float)imageHeight);
+            g.drawDashedLine(line, dashPattern, 2, 6.0f);
+        }
+    }
 }
 
 void SpectrogramComponent::drawChroma(int x, std::vector<float>& dBColumn, const int imageHeight)
@@ -1489,6 +1551,21 @@ void SpectrogramComponent::drawNextLineOfSpectrogram()
 
     const int x = imageWidth - 1; // rightmost column
 
+    // Scroll onset detection markers left by one column
+    if (!onsetDetected.empty())
+    {
+        std::move(onsetDetected.begin() + 1, onsetDetected.end(), onsetDetected.begin());
+        onsetDetected[onsetDetected.size() - 1] = 0.0f;
+    }
+
+    // Apply pending onset flag AFTER scroll, so it lands at the rightmost column
+    if (pendingOnset)
+    {
+        if (!onsetDetected.empty())
+            onsetDetected[onsetDetected.size() - 1] = 1.0f;
+        pendingOnset = false;
+    }
+
     const float maxFreq = sampleRate / 2.0f;
 
     switch (currentMode)
@@ -1513,6 +1590,9 @@ void SpectrogramComponent::drawNextLineOfSpectrogram()
             break;
         case SpectrogramMode::LinearWithRolloff:
             drawLinearWithRolloff(x, dBColumn, imageHeight, maxFreq);
+            break;
+        case SpectrogramMode::OnsetMarkers:
+            drawOnsetMarkers(x, dBColumn, imageHeight, maxFreq);
             break;
         case SpectrogramMode::LinearPlus:
             drawReassignedSpectrogram(x, dBColumn, imageHeight, maxFreq);
@@ -2113,6 +2193,9 @@ void SpectrogramComponent::paint(juce::Graphics& g)
         case SpectrogramMode::LinearWithRolloff:
             paintSTFTYAxis(g, width, imageHeight);
             break;
+        case SpectrogramMode::OnsetMarkers:
+            paintSTFTYAxis(g, width, imageHeight);
+            break;
         case SpectrogramMode::LinearPlus:
             paintSTFTYAxis(g, width, imageHeight);
             break;
@@ -2135,7 +2218,8 @@ void SpectrogramComponent::paint(juce::Graphics& g)
         (currentMode == SpectrogramMode::LinearWithCentroid) ||
         (currentMode == SpectrogramMode::Mel) ||
         (currentMode == SpectrogramMode::MelPlus) ||
-        (currentMode == SpectrogramMode::LinearWithRolloff);
+        (currentMode == SpectrogramMode::LinearWithRolloff) ||
+        (currentMode == SpectrogramMode::OnsetMarkers);
     if (showNoteCAxis)
     {
         paintNoteYAxis(g, modeSupportsNoteAxis);
@@ -2222,6 +2306,9 @@ void SpectrogramComponent::paint(juce::Graphics& g)
                 labelText = drawSTFTTooltip(dB, imgY, freq);
                 break;
             case SpectrogramMode::LinearWithRolloff:
+                labelText = drawSTFTTooltip(dB, imgY, freq);
+                break;
+            case SpectrogramMode::OnsetMarkers:
                 labelText = drawSTFTTooltip(dB, imgY, freq);
                 break;
             case SpectrogramMode::LinearPlus:
@@ -2424,6 +2511,75 @@ void SpectrogramComponent::initFourierTempogram()
     resetTempoStats();
 }
 
+void SpectrogramComponent::initOnsetBuffer()
+{
+    const double onsetSamplePeriod = (hopSize > 0) ? (double)hopSize / sampleRate : 0.0;
+    onsetBufferSize = juce::jmax(1, (int)std::round(60.0 / juce::jmax(1e-9, onsetSamplePeriod)));
+    onsetBuffer.assign(juce::jmax(1, onsetBufferSize), 0.0f);
+    onsetWrite = 0;
+    lastOnsetFrame = -100;
+    onsetFrameCounter = 0;
+    onsetRunMin = std::numeric_limits<float>::max();
+    onsetRunMax = 0.0f;
+    onsetDetected.assign(spectrogramImage.getWidth(), 0.0f);
+    pendingOnset = false;
+    lastCompSpec.assign(fftSize / 2, 0.0f);
+    haveLastMag = false;
+}
+
+// Peak-picking algorithm adapted from librosa (ISC License)
+// https://github.com/librosa/librosa
+bool SpectrogramComponent::detectOnset()
+{
+    if (onsetBuffer.empty())
+        return false;
+
+    // Cold-start guard: need enough frames for pre_avg + post_avg window
+    if (onsetFrameCounter < (peakPreAvg + peakPostAvg))
+        return false;
+
+    const size_t currentIdx = (onsetWrite == 0) ? (onsetBuffer.size() - 1) : (onsetWrite - 1);
+    const float flux = onsetBuffer[currentIdx];
+
+    const float normRange = juce::jmax(1e-9f, onsetRunMax - onsetRunMin);
+    const float normalizedFlux = juce::jlimit(0.0f, 1.0f, (flux - onsetRunMin) / normRange);
+
+    auto getRelative = [&](int offset) -> float
+    {
+        int idx = (int)currentIdx + offset;
+        while (idx < 0) idx += (int)onsetBuffer.size();
+        while (idx >= (int)onsetBuffer.size()) idx -= (int)onsetBuffer.size();
+        return onsetBuffer[(size_t)idx];
+    };
+
+    // Condition (a): local maximum in [current - pre_max, current + post_max]
+    bool isLocalMax = true;
+    for (int i = -peakPreMax; i <= peakPostMax; ++i)
+    {
+        if (i == 0) continue;
+        if (getRelative(i) >= flux) { isLocalMax = false; break; }
+    }
+    if (!isLocalMax) return false;
+
+    // Condition (b): normalized value >= mean(local window) + delta
+    float sum = 0.0f;
+    int count = 0;
+    for (int i = -peakPreAvg; i <= peakPostAvg; ++i)
+    {
+        sum += getRelative(i);
+        count++;
+    }
+    const float mean = sum / juce::jmax(1, count);
+    const float normMean = juce::jlimit(0.0f, 1.0f, (mean - onsetRunMin) / normRange);
+    if (normalizedFlux < normMean + peakDelta) return false;
+
+    // Condition (c): minimum wait since last onset
+    if (onsetFrameCounter - lastOnsetFrame <= peakWait) return false;
+
+    lastOnsetFrame = onsetFrameCounter;
+    return true;
+}
+
 float SpectrogramComponent::fourierTempoPrior(float bpm) const
 {
     // Log-normal prior (Gaussian in log2 space)
@@ -2533,4 +2689,6 @@ void SpectrogramComponent::resized()
 {
     spectrogramImage = juce::Image(juce::Image::RGB, getWidth(), getHeight(), true);
     imgColAge.assign(spectrogramImage.getWidth(), -1);
+    onsetDetected.assign(spectrogramImage.getWidth(), 0.0f);
 }
+

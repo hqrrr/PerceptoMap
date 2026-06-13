@@ -43,6 +43,7 @@ public:
         SpectralContrast,
         SpectralFlatness,
         LinearWithRolloff,
+        OnsetMarkers,
         // TODO: add Rhythm, etc.
     };
 
@@ -179,6 +180,7 @@ private:
     void drawMFCC(int x, std::vector<float>& dBColumn, const int imageHeight);
     void drawLinearWithCentroid(int x, std::vector<float>& dBColumn, const int imageHeight, const float maxFreq);
     void drawLinearWithRolloff(int x, std::vector<float>& dBColumn, int imageHeight, float maxFreq);
+    void drawOnsetMarkers(int x, std::vector<float>& dBColumn, const int imageHeight, const float maxFreq);
     void drawChroma(int x, std::vector<float>& dBColumn, const int imageHeight);
     void drawSpectralContrast(int x, std::vector<float>& dBColumn, const int imageHeight);
     void drawSpectralFlatness(int x, std::vector<float>& dBColumn, int imageHeight);
@@ -188,6 +190,9 @@ private:
     void drawFourierTempogram(int x, std::vector<float>& dBColumn, int imageHeight);
     // draw Autocorrelation Tempogram
     void drawAutoTempogram(int x, std::vector<float>& dBColumn, int imageHeight);
+
+    // Onset Detection
+    bool detectOnset();
 
     SpectrogramMode currentMode = SpectrogramMode::Linear;
 
@@ -247,6 +252,14 @@ private:
     static constexpr float rolloffPercents[4] = {0.25f, 0.50f, 0.85f, 0.95f};
     bool rolloffCurveVisible[4] = {true, true, true, true};
 
+    // Onset detection peak-picking parameters
+    static constexpr int peakPreMax = 3;
+    static constexpr int peakPostMax = 0;
+    static constexpr int peakPreAvg = 3;
+    static constexpr int peakPostAvg = 0;
+    static constexpr float peakDelta = 0.5f;
+    static constexpr int peakWait = 10;
+
     // Chromagram
     void buildChromaFilterBank(int fftSize, double sampleRate);
     std::vector<std::vector<float>> chromaFilterBank;
@@ -273,6 +286,17 @@ private:
     // The longer the time, the sharper and clearer the peak becomes,
     // but the image response slows down.
     const double wantWinSec = 8.0; // s
+    // Onset detection state
+    std::vector<float> onsetBuffer;
+    size_t onsetWrite = 0;
+    int onsetBufferSize = 0;
+    int lastOnsetFrame = -100;
+    int onsetFrameCounter = 0;
+    float onsetRunMin = 0.0f;
+    float onsetRunMax = 1.0f;
+    std::vector<float> onsetDetected;
+    bool pendingOnset = false;
+
     // novelty (spectral flux) buffer
     std::vector<float> noveltyRing;
     size_t noveltyWrite = 0;
@@ -288,8 +312,9 @@ private:
     double noveltySamplePeriod = 0.0;
     // activity gate threshold
     const float activityThresh = 1e-3f;
-    // init helper
+    // init helpers
     void initFourierTempogram();
+    void initOnsetBuffer();
     // Tempo line (Fourier) overlay
     float tempoPriorStartBPM = 120.0f;
     float tempoPriorSigmaLog2 = 0.5f;

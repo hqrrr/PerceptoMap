@@ -39,6 +39,7 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
 - **Spectral Contrast** measuring the ratio of spectral peaks to valleys across octave-spaced frequency bands — high contrast indicates clear harmonic/narrow-band signals, low contrast indicates broadband noise. Based on [[10.1109/ICME.2002.1035731](https://doi.org/10.1109/ICME.2002.1035731)]. <span style="color: gray;">[added in v0.15]</span>
 - **Spectral Flatness** (Wiener entropy): a single scalar per frame measuring how noise-like (close to 1.0) vs tone-like (close to 0.0) a sound is. Rendered as a height-proportional filled area chart with semantic tooltip. <span style="color: gray;">[added in v0.16]</span>
 - **Spectral Rolloff** — cumulative energy threshold curves (R25/R50/R85/R95) overlaid on STFT spectrogram, tracking where different percentages of total spectral energy are concentrated. With toggleable curve visibility via clickable legend checkboxes. <span style="color: gray;">[added in v0.17]</span>
+- **Onset Detection Markers** — real-time transient detection using log-compressed spectral flux and a librosa-style `peak_pick` algorithm, rendered as vertical dashed white lines overlaid on the Linear STFT spectrogram. <span style="color: gray;">[added in v0.18]</span>
 - **Time-Frequency Reassignment** mode (Linear+) for enhanced STFT resolution, based on the paper [[hal-00414583: Time-Frequency reassignment: from principles to algorithms](https://hal.science/hal-00414583/document)]. This mode sharpens the localization of spectral peaks by reassigning energy to more accurate time-frequency coordinates, making harmonic structures and transient details clearer compared to the standard STFT. <span style="color: gray;">[added in v0.6]</span>
 - **Time-Frequency Reassigned Mel Spectrogram** mode (Mel+) - Mel-scaled display using the same time-frequency reassignment principle as Linear+. It computes the reassigned frequency from the complex STFT and then projects energy onto the Mel axis, yielding sharper harmonic ridges and crisper transients than a standard Mel spectrogram. <span style="color: gray;">[added in v0.7]</span>
 - Real-time **Fourier Tempogram (with Tempo Line)** - Rhythm/tempo map in the BPM (frequency) domain with a dynamic tempo track, based on [[10.1109/ICASSP.2010.5495219](https://doi.org/10.1109/ICASSP.2010.5495219)]. <span style="color: gray;">[added in v0.10]</span>
@@ -270,11 +271,12 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
       </sub>
     </td>
     <td align="center" valign="top">
-      <img src="_pics/blank_800x630.png" width="100%" alt="blank" />
+      <img src="_pics/gui_onset_markers.png" width="100%" alt="blank" />
       <br/>
       <sub>
-        <strong></strong>
+        <strong>Onset Detection Markers:</strong>
         <i>
+          Real-time transient detection using log-compressed spectral flux and a librosa-style peak_pick algorithm, rendered as vertical dashed lines overlaid on the Linear STFT spectrogram. <span style="color: gray;">[added in v0.18]</span>
         </i>
       </sub>
     </td>
@@ -302,7 +304,7 @@ Unlike typical spectrum or spectrogram analyzers, it supports perceptual visuali
 | Spectral Contrast | ✅ Done (v0.15) | Octave-band spectral contrast: ratio of spectral peaks to valleys per frequency band | Divides FFT magnitude bins into `nBands+1` octave-spaced frequency bands (first band: [0, `fmin`=200 Hz], then octave doublings: [200, 400], [400, 800], … up to Nyquist). Per band: sorts magnitudes, computes peak (mean of top `quantile`=2%) and valley (mean of bottom 2%); contrast = `log10(peak) − log10(valley)`, normalized to [0,1] for display. Follows the librosa convention (direct log difference) rather than the paper's original `ln(1+peak)−ln(1+valley)` formulation. Based on [[10.1109/ICME.2002.1035731](https://doi.org/10.1109/ICME.2002.1035731)]. |
 | Spectral Flatness | ✅ Done (v0.16) | Wiener entropy per frame: geometric mean / arithmetic mean of spectrum, measuring how noise-like vs tone-like a sound is | Computed in log-domain for numerical stability: `flatness = exp(mean(log(mags+eps))) / mean(mags)`. DC bin skipped (`i=1`). Silence guard returns `0.0`. Rendered as height-proportional filled area chart. |
 | Spectral Rolloff | ✅ Done (v0.17) | Frequency threshold below which X% of total spectral energy is contained, with 4 configurable curves (R25/R50/R85/R95) overlaid on STFT | Cumulative energy threshold from linear STFT magnitude spectrum (DC bin excluded); 4 independent EMA-smoothed curves with warm to cool gradient; clickable legend checkboxes toggling individual curve visibility |
-| Onset Detection Markers | ⏳ Planned | Transient markers overlaid on spectrogram | - |
+| Onset Detection Markers | ✅ Done (v0.18) | Real-time transient detection overlaid on Linear STFT spectrogram | Log-compressed STFT spectral flux; librosa-style `peak_pick` with `pre_max=3, post_max=0, pre_avg=3, post_avg=0, delta=0.5, wait=10`; sliding-window min-max normalization; rendered as vertical dashed lines. |
 | Constant-Q Transform (CQT) Spectrogram | ⏳ Planned | Log-spaced, pitch-aligned filterbank replacing FFT | - |
 | Harmonic-Percussive Source Separation (HPSS) | ⏳ Planned | Median-filter based decomposition of spectrogram into harmonic and percussive components | - |
 
