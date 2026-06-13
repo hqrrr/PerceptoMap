@@ -47,7 +47,7 @@ jobs:
         uses: actions/checkout@v4
         
       - name: Set up MSBuild (Windows only)
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-2022'
         uses: microsoft/setup-msbuild@v2
 
       - name: Install dependencies (Linux only)
@@ -81,7 +81,7 @@ jobs:
         run: cmake --build ${{ env.BUILD_DIR }} --config ${{ env.BUILD_TYPE }}
 
       - name: Zip Plugin (Windows)
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-2022'
         shell: pwsh
         run: |
           $pluginPath = "${{ env.BUILD_DIR }}\${{ matrix.artifact_path }}"
@@ -93,7 +93,7 @@ jobs:
 
 
       - name: Zip Plugin (Unix)
-        if: matrix.os != 'windows-latest'
+        if: matrix.os != 'windows-2022'
         run: |
           cd "${{ env.BUILD_DIR }}/${{ matrix.artifact_path }}/.."
           zip -r ../../../${{ matrix.zip_name }} PerceptoMap.vst3
