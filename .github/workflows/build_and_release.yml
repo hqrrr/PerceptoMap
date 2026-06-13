@@ -19,7 +19,7 @@ jobs:
       matrix:
         include:
           - name: Windows
-            os: windows-latest
+            os: windows-2022
             generator: "Visual Studio 17 2022"
             artifact_path: PerceptoMap_artefacts/Release/VST3/PerceptoMap.vst3
             zip_name: PerceptoMap_vst3_${{ github.ref_name }}_windows_x64.zip
