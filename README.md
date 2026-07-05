@@ -454,4 +454,10 @@ If you use **PerceptoMap** in academic work, please cite a tagged release.
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=hqrrr/PerceptoMap&type=Date)](https://www.star-history.com/#hqrrr/PerceptoMap&Date)
+<a href="https://www.star-history.com/?repos=hqrrr%2FPerceptoMap&type=date&legend=bottom-right">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=hqrrr/PerceptoMap&type=date&theme=dark&legend=bottom-right" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=hqrrr/PerceptoMap&type=date&legend=bottom-right" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=hqrrr/PerceptoMap&type=date&legend=bottom-right" />
+ </picture>
+</a>
