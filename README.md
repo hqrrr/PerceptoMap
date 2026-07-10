@@ -456,7 +456,7 @@ If you use **PerceptoMap** in academic work, please cite a tagged release.
 
 <!-- star-history:start -->
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/star-history/star-history-dark-20260709074938.svg">
-  <img alt="Star history" src="assets/star-history/star-history-light-20260709074938.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="assets/star-history/star-history-dark-20260710074250.svg">
+  <img alt="Star history" src="assets/star-history/star-history-light-20260710074250.svg">
 </picture>
 <!-- star-history:end -->
