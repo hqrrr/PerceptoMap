@@ -20,3 +20,4 @@ jobs:
       - uses: narayann7/star-history-action@v1
         with:
           repos: ${{ github.repository }}
+          token: ${{ secrets.GITHUB_TOKEN }}
